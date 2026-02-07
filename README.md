@@ -17,7 +17,7 @@ With _**CerberusGran**_, we hope to marry multi-grain complexity with a focused 
 
 In their joint survey and new interface work for granular synthesizers, [“GrainTrain: A Hand-drawn Multi-touch Interface for Granular Synthesis”](https://anilcamci.github.io/publications/Camci_2018_NIME_GrainTrain.pdf), the authors ascribe a taxonomy of granular synthesis relating to 3 features: parameter control, keyboard performance, and waveform scrubbing; the following graphic is from this NIME paper. 
 
- ![Taxonomy](images/Taxonomy.png)
+![Taxonomy](images/Taxonomy.png)
 
 In our own words, we define these features focuses as 3 separate paradigms: the processor paradigm, the sampler paradigm, and the gestural paradigm. While we are unsure exactly where are system might lie in this framework, we are currently leaning towards a processor paradigm with a focus on interface simplicity and discoverability; this lies in contrast to other granular synthesis systems like the [“Sound Atom”](https://nime.org/proceedings/2025/nime2025_21.pdf) which provide so much customization that a user is unsure where to begin; see the below image. 
 
@@ -36,7 +36,7 @@ Then, these ramps feed into a particle controller, “mc.snowfall~”, which man
 The granulation engine maintains a fixed number of parallel grain voices, each has as an independent micro-DSP pipeline that reads from the source buffer, develops a window envelope, and then processes audio using per-grain parameters such as pitch, filtering, and modulation in the UI. 
 Finally, all active grain voices are summed and mixed at the audio rate to produce the output signal. 
 
- 
+![SoundAtomDiagram](images/SoundAtomDiagram.png)
 
 Carter et al. emphasize manual per-grain parameterization through user interface. By contrast, [Roads et al.’s EmissionControl2](https://github.com/EmissionControl2/EmissionControl2) implements real-time algorithmic configuration of grains at emission time. Per-grain parameters are computed dynamically by the scheduler and modulation system before audio-rate processing occurs. 
 
@@ -48,6 +48,7 @@ Each trigger retrieves an inactive grain, samples the current scanner position, 
 Thus, the grain is activated and enters the audio rate stage. All generated samples are summed and mixed to generate the output signal. 
 Once a grain completes its assigned duration, it is returned to the inactive pool for reuse, preserving grain integrity and dense, heterogeneous textures through real-time algorithmic per-grain configuration.  
 
+![SoundAtomDiagram](images/EC2Diagram.png)
  
 Although both the granular synthesis systems of Carter et al. and Roads et al. introduce algorithmic innovations at the per-grain (micro-level), they remain limited to a binary control structure between individual grain events and macro-textures (audible texture), without an explicit meso-level representation (latent space). In both case studies, grain is either manually specified at the micro scale or algorithmically diversified through stochastic processes, but no representation captures intermediate, reusable, or gestural texture structures. This absence of a meso-level representation motivates the introduction of real-time machine learning frameworks. 
 
