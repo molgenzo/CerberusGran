@@ -17,9 +17,11 @@ With _**CerberusGran**_, we hope to marry multi-grain complexity with a focused 
 
 In their joint survey and new interface work for granular synthesizers, [“GrainTrain: A Hand-drawn Multi-touch Interface for Granular Synthesis”](https://anilcamci.github.io/publications/Camci_2018_NIME_GrainTrain.pdf), the authors ascribe a taxonomy of granular synthesis relating to 3 features: parameter control, keyboard performance, and waveform scrubbing; the following graphic is from this NIME paper. 
 
- 
+ ![Taxonomy](images/Taxonomy.png)
 
-In our own words, we define these features focuses as 3 separate paradigms: the processor paradigm, the sampler paradigm, and the gestural paradigm. While we are unsure exactly where are system might lie in this framework, we are currently leaning towards a processor paradigm with a focus on interface simplicity and discoverability; this lies in contrast to other granular synthesis systems like the [“Sound Atom”](https://nime.org/proceedings/2025/nime2025_21.pdf) which provide so much customization that a user is unsure where to begin; see the below image.  
+In our own words, we define these features focuses as 3 separate paradigms: the processor paradigm, the sampler paradigm, and the gestural paradigm. While we are unsure exactly where are system might lie in this framework, we are currently leaning towards a processor paradigm with a focus on interface simplicity and discoverability; this lies in contrast to other granular synthesis systems like the [“Sound Atom”](https://nime.org/proceedings/2025/nime2025_21.pdf) which provide so much customization that a user is unsure where to begin; see the below image. 
+
+![SoundAtomUI](images/SoundAtomUI.png)
 
 Traditional granular synthesis DSP systems are often developed under a global mass control paradigm. 
 This means that grains are generated as a cloud rather than treated as independent sound events; Synthesis parameters are applied through shared effects chains and variation of each grain is introduced through stochastic processes after grain generation. 
