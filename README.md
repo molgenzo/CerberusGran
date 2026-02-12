@@ -110,11 +110,11 @@ A bottom bar containing master output gain, dry/wet mix, master pitch offset, a 
 
 The UI provides real-time feedback beyond the waveform markers: per-head level meters, grain trigger activity indicators (brief visual pulses when grains fire), and a subtle frequency curve in the filter module that responds to cutoff and resonance. All visualization data is sent from the audio thread to the UI via a lock-free FIFO, ensuring the two threads never share mutable state directly.
 
-## 5. Thread Safety
+### 5. Thread Safety
 
 The audio thread must never allocate memory, acquire locks, or perform I/O. All grain data is pre-allocated. Thread communication uses atomic variables for simple scalar values (parameters, buffer pointers) and JUCE AbstractFifo for structured data (UI visualization events). Denormal protection (ScopedNoDenormals) is applied at the start of every processBlock to prevent CPU spikes in the filter and delay feedback paths.
 
-## 6. Testing
+### 6. Testing
 
 **Unit tests** will cover grain scheduling accuracy, window function correctness, filter behavior, and buffer wrap-around logic.
 
@@ -124,7 +124,7 @@ The audio thread must never allocate memory, acquire locks, or perform I/O. All 
 
 **Performance target (optional)** is under 30% CPU on a modern machine at 512-sample buffer size with all five heads active at moderate density.
 
-## 7. Tools and Technologies
+### 7. Tools and Technologies
 
 | Component | Technology |
 |---|---|
@@ -134,7 +134,7 @@ The audio thread must never allocate memory, acquire locks, or perform I/O. All 
 | Plugin Formats | VST3 (primary), AU (stretch) |
 | Version Control | Git |
 
-## 8. Scope
+### 8. Scope
 
 **In scope.** File-based granular synthesis, five grain heads with per-head DSP (filter, saturator, bitcrusher, delay), per-head LFO, DAW integration as VST3, preset system, and a functional UI with waveform display, head panels, and real-time visual feedback.
 
