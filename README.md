@@ -38,19 +38,79 @@ Complementary to this line of work, research on latent interpolation explores ho
 
 The plugin will be developed in  [JUCE](https://github.com/juce-framework/JUCE) framework; The UI components and possible cross-platform compatibility will be easier to add using this framework. 
 
-### System Architecture
+### 1. Overview
+[cite_start]This project is a real-time granular synthesis plugin built in C++ with the JUCE framework, designed to run as a VST3/AU instrument inside a DAW[cite: 1, 2]. [cite_start]The plugin provides five independent grain heads that each read from a shared audio source[cite: 3]. [cite_start]Each head controls its own grain parameters (position, density, pitch, duration) and routes its output through a dedicated DSP effects chain before mixing into the final stereo output[cite: 4]. [cite_start]The central design problem is managing potentially hundreds of overlapping grains across five heads, each with its own effects processing, while staying within the real-time constraints of an audio callback[cite: 5]. [cite_start]This requires careful memory management (no allocation on the audio thread), efficient voice pooling, and a processing topology that balances flexibility with CPU cost[cite: 6].
 
-**Input Stage:** Receive live audio from DAW and manage a source buffer for grain extraction.  
+### 2. Architecture
 
-**Grain Schedular:** Controls grain triggering based on the density parameter. Allocates grains rom the voice pool. Manages grain life cycle (active, releasing, free)  
+#### 2.1 Audio Source
+The user loads a sample via drag-and-drop. [cite_start]The file is decoded on the message thread and stored in an AudioBuffer[cite: 9]. The audio thread accesses this buffer as read-only. [cite_start]To avoid blocking during a file swap, the buffer pointer is exchanged atomically, so the audio thread always reads from a complete, valid buffer[cite: 10]. [cite_start]Live input granulation (capturing the DAW bus into a ring buffer) is a possible extension but is out of scope for the initial build[cite: 11].
 
-**Grain Voice Pool:** Maintains six grain voice instances. Each voice contains its own DSP effect chains. Since each grain will have its own DSP, the time based effects might make the voices persist beyond the grain size but that is an effect that we would like t enable.  
+#### 2.2 Grain Engine
+[cite_start]Each grain is a lightweight struct holding its read position, playback rate, duration, envelope phase, amplitude, and pan[cite: 13]. [cite_start]Grains are pre-allocated in a fixed-size object pool (32 per head, 160 total) at initialization, so no memory allocation happens during audio processing[cite: 14]. [cite_start]Each head has a scheduler that fires new grains at a rate determined by the density parameter[cite: 15]. [cite_start]When a grain is triggered, the scheduler pulls the next available slot from the pool, assigns randomized parameters based on the head's current settings and scatter ranges, and activates it[cite: 16]. [cite_start]When a grain's envelope completes, it is marked inactive and returned to the pool[cite: 17]. [cite_start]If no free slots are available, the trigger is silently dropped rather than stealing an active grain, which would cause audible artifacts[cite: 18].
 
-**Per-Grain DSP Chain:** Each grain voice contains windowing/envelope generator, filter, distortion, pitch shifting, delay with internal buffer and reverb.  
+#### 2.3 Envelope Windows
+Grain envelopes are essential for avoiding clicks at grain boundaries. [cite_start]The plugin supports Hann, Gaussian, Tukey, and Triangle windows[cite: 20]. [cite_start]Each shape is pre-computed as a lookup table at startup[cite: 21]. [cite_start]During playback, the grain's normalized phase indexes into the table with interpolation[cite: 22]. [cite_start]Hann is the default as it guarantees smooth amplitude at the start and end of every grain[cite: 23].
 
-**Voice-Manager:** This module will track active voices and releasing voices. This will keep a check on the when a voice can be returned to the free pool.  
+#### 2.4 Per-Head DSP Chain
+[cite_start]A key architectural decision is where to apply DSP effects[cite: 25]. [cite_start]Processing each individual grain through its own effect instances would be too expensive[cite: 26]. [cite_start]Instead, all active grains within a head are first summed into the head's local stereo buffer, and then that buffer is processed through the head's effect chain[cite: 27]. [cite_start]This gives five independently processed streams at a fraction of the CPU cost of per-grain processing[cite: 28]. [cite_start]The chain runs in a fixed order, with each effect independently bypassable[cite: 29].
 
-**Output Mixer:** The grains will be mixed and combined together before output.
+| Effect | Approach | Parameters |
+| :--- | :--- | :--- |
+| **Filter** | State Variable Filter (stable under modulation, provides LP/HP/BP/Notch from shared state) | Type, Cutoff, Resonance |
+| **Saturator** | Soft-clipping waveshaper (tanh-style) | Drive |
+| **Bitcrusher** | Sample rate reduction + bit depth quantization | Bit Depth, Rate Reduction |
+| **Delay** | Short circular-buffer delay with feedback | Time, Feedback, Mix |
+[cite_start][cite: 30]
+
+#### 2.5 Signal Flow
+[cite_start]Each processBlock call follows this sequence: for each of the five heads, the scheduler triggers new grains, active grains are synthesized and summed into the head's local buffer, the DSP chain processes the buffer, and the result is added to the main output[cite: 32]. [cite_start]A global gain stage and soft clipper are applied at the end to prevent digital overs[cite: 33].
+
+### 3. Parameters and Modulation
+[cite_start]All parameters are managed through JUCE Audio Processor Value Tree State, making them fully automatable from the DAW[cite: 35]. [cite_start]Parameters are generated programmatically across the five heads using a consistent naming convention (e.g., head0_position, head2_filterCutoff)[cite: 36]. [cite_start]Each head exposes roughly 22 parameters, totaling around 110 per-head parameters plus a few global controls (master gain, dry/wet, master pitch)[cite: 37]. [cite_start]Each head also includes an internal LFO (sine, triangle, saw, square, sample-and-hold) that can modulate one of three targets: grain position, pitch, or filter cutoff[cite: 38]. [cite_start]The LFO runs at control rate (once per block) rather than audio rate, keeping the CPU overhead minimal[cite: 39]. [cite_start]All parameter changes that reach the audio path are smoothed to suppress zipper noise from automation or knob movement[cite: 40].
+
+### 4. User Interface
+The UI is built with JUCE Component subclasses and a custom LookAndFeel. [cite_start]The layout has three zones[cite: 42].
+
+#### 4.1 Waveform Display (Top)
+A horizontal waveform viewer rendered via JUCE Audio Thumbnail. [cite_start]Five color-coded markers overlay the waveform showing each head's read position[cite: 44]. [cite_start]A shaded region around each marker indicates the scatter range[cite: 45]. [cite_start]Clicking on the waveform sets the selected head's position directly, providing an intuitive alternative to the rotary knob[cite: 46]. [cite_start]The waveform also serves as the drag-and-drop target for loading samples[cite: 47]. [cite_start]Position markers update at around 30 Hz, with only the marker regions repainted to avoid unnecessary CPU usage in the UI[cite: 48].
+
+#### 4.2 Grain Head Panels (Center)
+[cite_start]Five stacked panels, one per head, each color-matched to its waveform marker[cite: 50]. [cite_start]Each panel is organized left to right into four groups[cite: 51]:
+
+* [cite_start]**Grain Controls:** Rotary knobs for Position, Density, Duration, and Pitch, each paired with a smaller Scatter knob to control randomization range[cite: 52]. [cite_start]A segmented button selects the window shape[cite: 53].
+* [cite_start]**DSP Modules:** Four compact effect blocks (Filter, Saturator, Bitcrusher, Delay), each with a header toggle for bypass and only the essential knobs for that effect[cite: 54]. [cite_start]Bypassed modules are visually dimmed to reduce clutter[cite: 55].
+* [cite_start]**Output:** Gain and Pan knobs, a small stereo level meter, and a head enable/mute toggle[cite: 56].
+* [cite_start]**LFO (collapsible):** A thin expandable strip containing Rate, Depth, Shape, and Target controls[cite: 57]. [cite_start]Collapsed by default to keep the panel compact[cite: 58].
+
+[cite_start]Each panel can be collapsed entirely to a single summary row (head name, enable state, position and density readout), which is important for managing screen space when working with all five heads simultaneously[cite: 59].
+
+#### 4.3 Global Controls (Bottom)
+[cite_start]A bottom bar containing master output gain, dry/wet mix, master pitch offset, a stereo output meter, and a preset selector with save/load functionality[cite: 61].
+
+#### 4.4 Visual Feedback
+[cite_start]The UI provides real-time feedback beyond the waveform markers: per-head level meters, grain trigger activity indicators (brief visual pulses when grains fire), and a subtle frequency curve in the filter module that responds to cutoff and resonance[cite: 63]. [cite_start]All visualization data is sent from the audio thread to the UI via a lock-free FIFO, ensuring the two threads never share mutable state directly[cite: 64].
+
+### 5. Thread Safety
+The audio thread must never allocate memory, acquire locks, or perform I/O. [cite_start]All grain data is pre-allocated[cite: 66]. [cite_start]Thread communication uses atomic variables for simple scalar values (parameters, buffer pointers) and JUCE AbstractFifo for structured data (UI visualization events)[cite: 67]. [cite_start]Denormal protection (ScopedNoDenormals) is applied at the start of every processBlock to prevent CPU spikes in the filter and delay feedback paths[cite: 68].
+
+### 6. Testing
+[cite_start]Unit tests will cover grain scheduling accuracy, window function correctness, filter behavior, and buffer wrap-around logic[cite: 70]. [cite_start]Audio tests will use deterministic settings (zero scatter) with known input signals to verify expected output[cite: 71]. [cite_start]Edge cases include extreme density, minimum/maximum grain duration, and large pitch shifts[cite: 72]. [cite_start]DAW testing will verify parameter automation, session recall, bypass behavior, and offline rendering in Ableton Live, Logic Pro, and Reaper[cite: 73]. [cite_start]Performance target (optional) is under 30% CPU on a modern machine at 512-sample buffer size with all five heads active at moderate density[cite: 74].
+
+### 7. Tools and Technologies
+
+| Component | Technology |
+| :--- | :--- |
+| **Language** | C++17 |
+| **Framework** | JUCE 7.x |
+| **Build System** | CMake |
+| **Plugin Formats** | VST3 (primary), AU (stretch) |
+| **Version Control** | Git |
+[cite_start][cite: 76]
+
+### 9. Scope
+* [cite_start]**In scope:** File-based granular synthesis, five grain heads with per-head DSP (filter, saturator, bitcrusher, delay), per-head LFO, DAW integration as VST3, preset system, and a functional UI with waveform display, head panels, and real-time visual feedback[cite: 78].
+* [cite_start]**Out of scope (future work):** Live audio input, full modulation matrix, MIDI grain triggering, spectral processing, AAX format[cite: 79].
 
 ### Latent Space Neural Networks for Real Time Granular Synthesis 
 
