@@ -147,9 +147,17 @@ The system is structured around a latent-state representation that mediates betw
 High-level control mechanisms—including step sequencing, modulation sources, and continuous parameter changes—drive trajectories within the latent space, producing evolving sound states over time. The resulting latent representations are then decoded back into audio grains and passed through the existing granular playback and per-playhead DSP pipeline. To support real-time performance constraints, lightweight neural inference frameworks such as [RTNeural](https://ccrma.stanford.edu/~jatin/rtneural/) inform the deployment strategy of neural components, emphasizing efficient, low-latency execution within an audio DSP context. By separating control logic, latent representation, and signal processing into distinct conceptual layers, the architecture preserves the responsiveness of traditional granular synthesis while enabling coherent, representation-level sound transformation in real-time use. 
 
 ### _Rough Timeline_
-**1st Half of Course:** Make the Minimum Viable Product (The above system architecture + a simple interface)
 
-**2nd Half of Course:** Latent Space Interpolation/ML Addition; Interface and mapping-design experimentation with extensive internal (and _maybe_ external) testing
+# Development Timeline
 
+| Week | Dates | Focus | Goal |
+|---|---|---|---|
+| 1-2 | Feb 12 - Feb 25 | Project Setup | CMake build system, empty plugin shell loading in DAW, sample loading with drag-and-drop, AudioBuffer with atomic swap |
+| 3-4 | Feb 26 - Mar 11 | Single Grain Head | Grain struct, object pool, scheduler, synthesis loop, Hann windowing. Audible granular output from one head with position, density, duration, pitch |
+| 5 | Mar 12 - Mar 18 | Full Engine | Remaining window functions (Gaussian, Tukey, Triangle). Expand to all five heads with mixing |
+| 6-7 | Mar 19 - Apr 1 | Per-Head DSP | SVF filter, saturator, bitcrusher, delay. Bypass toggles. SmoothedValue on all DSP parameters |
+| 8 | Apr 2 - Apr 8 | Parameters and Modulation | Full APVTS layout across five heads, per-head LFO with target routing, preset save/load |
+| 9-10 | Apr 9 - Apr 22 | UI | Waveform display with AudioThumbnail, head panels with knobs, global controls, visual feedback (meters, grain activity), custom LookAndFeel |
+| 11 | Apr 23 - Apr 29 | Polish and Delivery | Testing, DAW compatibility, bug fixes, CPU profiling, demo video, final report |
 
 
