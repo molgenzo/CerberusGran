@@ -80,7 +80,7 @@ Each head also includes an internal LFO (sine, triangle, saw, square, sample-and
 
 ### 4. User Interface
 
-The UI is built with JUCE Component subclasses and a custom LookAndFeel. The layout has three zones.
+The UI is built with JUCE Component subclasses and a custom LookAndFeel. The layout may have three zones.
 
 #### 4.1 Waveform Display (Top)
 
