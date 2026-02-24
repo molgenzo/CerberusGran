@@ -32,6 +32,21 @@ juce::AudioProcessorEditor *CerberusGranAudioProcessor::createEditor()
     return new CerberusGranAudioProcessorEditor(*this);
 }
 
+bool CerberusGranAudioProcessor::loadAudioFile(const juce::File& file, juce::String& errorMessage)
+{
+    return sampleLoader.loadFromFile(file, errorMessage);
+}
+
+const juce::AudioBuffer<float>* CerberusGranAudioProcessor::getCurrentSampleBuffer() const noexcept
+{
+    return sampleLoader.getActiveBuffer();
+}
+
+juce::String CerberusGranAudioProcessor::getLoadedFileName() const
+{
+    return sampleLoader.getLoadedFileName();
+}
+
 juce::AudioProcessor *JUCE_CALLTYPE createPluginFilter()
 {
     return new CerberusGranAudioProcessor();

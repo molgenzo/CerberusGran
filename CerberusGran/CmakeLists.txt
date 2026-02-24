@@ -2,7 +2,7 @@ cmake_minimum_required(VERSION 3.15)
 
 project(CerberusGran VERSION 0.1.0)
 
-set(JUCE_DIR "/Users/ishaanjagyasi/Desktop/MSMT_4thSem/ASE/Final_project/JUCE")
+set(JUCE_DIR "${CMAKE_CURRENT_SOURCE_DIR}/../JUCE")
 
 add_subdirectory(${JUCE_DIR} JUCE)
 
@@ -24,6 +24,10 @@ target_sources(CerberusGran PRIVATE
     Source/PluginProcessor.h
     Source/PluginEditor.cpp
     Source/PluginEditor.h
+    Source/AudioSampleLoader.cpp
+    Source/AudioSampleLoader.h
+    Source/WaveformDropComponent.cpp
+    Source/WaveformDropComponent.h
 )
 
 target_compile_definitions(CerberusGran_VST3 PRIVATE JUCE_VST3_CAN_REPLACE_VST2=0)

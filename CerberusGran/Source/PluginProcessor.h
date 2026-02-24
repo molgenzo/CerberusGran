@@ -1,5 +1,6 @@
 #pragma once
 #include <JuceHeader.h>
+#include "AudioSampleLoader.h"
 
 class CerberusGranAudioProcessor : public juce::AudioProcessor
 {
@@ -28,6 +29,12 @@ public:
   void getStateInformation (juce::MemoryBlock&) override {}
   void setStateInformation (const void*, int) override {}
 
+  bool loadAudioFile(const juce::File& file, juce::String& errorMessage);
+  const juce::AudioBuffer<float>* getCurrentSampleBuffer() const noexcept;
+  juce::String getLoadedFileName() const;
+
 private:
+  AudioSampleLoader sampleLoader;
+
   JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (CerberusGranAudioProcessor)
 };
