@@ -5,54 +5,67 @@
 class WindowFunctions
 {
 public:
-    enum Shape { Hann = 0, Gaussian, Tukey, Triangle, NumShapes };
-
     static constexpr int kTableSize = 1024;
 
-    static void initialise()
+    // Window types: 0=Hann, 1=Gaussian, 2=Tukey, 3=Triangle
+    static float getValue (int windowType, float phase)
     {
-        if (initialised) return;
+        static const auto& tables = getTables();
 
-        for (int i = 0; i < kTableSize; ++i)
-        {
-            double phase = static_cast<double> (i) / static_cast<double> (kTableSize - 1);
-
-            // Hann
-            tables[Hann][i] = static_cast<float> (0.5 * (1.0 - std::cos (2.0 * M_PI * phase)));
-
-            // Gaussian (sigma = 0.4)
-            double g = (phase - 0.5) / 0.4;
-            tables[Gaussian][i] = static_cast<float> (std::exp (-0.5 * g * g));
-
-            // Tukey (alpha = 0.5)
-            if (phase < 0.25)
-                tables[Tukey][i] = static_cast<float> (0.5 * (1.0 + std::cos (2.0 * M_PI * (phase / 0.5 - 1.0))));
-            else if (phase > 0.75)
-                tables[Tukey][i] = static_cast<float> (0.5 * (1.0 + std::cos (2.0 * M_PI * ((phase - 0.75) / 0.5))));
-            else
-                tables[Tukey][i] = 1.0f;
-
-            // Triangle
-            tables[Triangle][i] = static_cast<float> (phase < 0.5 ? 2.0 * phase : 2.0 * (1.0 - phase));
-        }
-
-        initialised = true;
-    }
-
-    static float lookup (int shape, float phase)
-    {
-        if (shape < 0 || shape >= NumShapes) shape = Hann;
+        windowType = (windowType < 0 || windowType > 3) ? 0 : windowType;
 
         float pos = phase * static_cast<float> (kTableSize - 1);
         int idx0 = static_cast<int> (pos);
-        if (idx0 < 0) idx0 = 0;
-        if (idx0 >= kTableSize - 1) return tables[shape][kTableSize - 1];
-
         float frac = pos - static_cast<float> (idx0);
-        return tables[shape][idx0] + frac * (tables[shape][idx0 + 1] - tables[shape][idx0]);
+
+        if (idx0 < 0) idx0 = 0;
+        if (idx0 >= kTableSize - 1) return tables[windowType][kTableSize - 1];
+
+        return tables[windowType][idx0] * (1.0f - frac)
+             + tables[windowType][idx0 + 1] * frac;
     }
 
 private:
-    static inline bool initialised = false;
-    static inline std::array<std::array<float, kTableSize>, NumShapes> tables {};
+    using Table = std::array<float, kTableSize>;
+    using Tables = std::array<Table, 4>;
+
+    static const Tables& getTables()
+    {
+        static Tables tables = buildTables();
+        return tables;
+    }
+
+    static Tables buildTables()
+    {
+        Tables t {};
+        constexpr float pi = 3.14159265358979323846f;
+
+        for (int i = 0; i < kTableSize; ++i)
+        {
+            float p = static_cast<float> (i) / static_cast<float> (kTableSize - 1);
+
+            // Hann
+            t[0][i] = 0.5f * (1.0f - std::cos (2.0f * pi * p));
+
+            // Gaussian (sigma = 0.4)
+            float g = (p - 0.5f) / 0.4f;
+            t[1][i] = std::exp (-0.5f * g * g);
+
+            // Tukey (alpha = 0.5)
+            {
+                constexpr float alpha = 0.5f;
+                if (p < alpha * 0.5f)
+                    t[2][i] = 0.5f * (1.0f + std::cos (pi * (2.0f * p / alpha - 1.0f)));
+                else if (p > 1.0f - alpha * 0.5f)
+                    t[2][i] = 0.5f * (1.0f + std::cos (pi * (2.0f * p / alpha - 2.0f / alpha + 1.0f)));
+                else
+                    t[2][i] = 1.0f;
+            }
+
+            // Triangle
+            t[3][i] = (p < 0.5f) ? (2.0f * p) : (2.0f * (1.0f - p));
+        }
+
+        return t;
+    }
 };

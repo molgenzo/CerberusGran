@@ -1,6 +1,5 @@
 #pragma once
 #include <array>
-#include <cstdint>
 
 struct Grain
 {
@@ -36,26 +35,17 @@ public:
     Grain* acquire()
     {
         for (auto& g : grains)
-        {
-            if (!g.active)
-            {
-                g.active = true;
-                return &g;
-            }
-        }
+            if (!g.active) { g.active = true; return &g; }
         return nullptr;
     }
 
     void release (Grain* g)
     {
-        if (g != nullptr)
-            g->active = false;
+        if (g) g->reset();
     }
 
     Grain* begin() { return grains.data(); }
     Grain* end()   { return grains.data() + grains.size(); }
-    const Grain* begin() const { return grains.data(); }
-    const Grain* end()   const { return grains.data() + grains.size(); }
 
 private:
     std::array<Grain, kMaxGrainsPerHead> grains {};
