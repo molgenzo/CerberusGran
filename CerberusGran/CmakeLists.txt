@@ -6,14 +6,6 @@ set(JUCE_DIR "${CMAKE_CURRENT_SOURCE_DIR}/../JUCE")
 
 add_subdirectory(${JUCE_DIR} JUCE)
 
-# Build universal binaries so REAPER can load in native or Rosetta modes.
-if(APPLE)
-    set(CMAKE_OSX_ARCHITECTURES "arm64;x86_64" CACHE STRING "macOS architectures" FORCE)
-endif()
-
-# Ensure plugin copy runs even if JUCE cache var was previously configured OFF.
-set(JUCE_COPY_PLUGIN_AFTER_BUILD ON CACHE BOOL "Copy plugin bundles after build" FORCE)
-
 juce_add_plugin(CerberusGran
     COMPANY_NAME "Ishaan"
     IS_SYNTH FALSE
@@ -21,9 +13,9 @@ juce_add_plugin(CerberusGran
     NEEDS_MIDI_OUTPUT FALSE
     IS_MIDI_EFFECT FALSE
     COPY_PLUGIN_AFTER_BUILD TRUE
-    PLUGIN_MANUFACTURER_CODE ISHN
-    PLUGIN_CODE CBRG
-    FORMATS VST3
+    PLUGIN_MANUFACTURER_CODE Ishn
+    PLUGIN_CODE CbrG
+    FORMATS VST3 AU
     PRODUCT_NAME "CerberusGran"
 )
 
@@ -38,16 +30,10 @@ target_sources(CerberusGran PRIVATE
     Source/GrainHead.h
     Source/GrainHead.cpp
     Source/GrainEngine.h
-    Source/GrainEngine.cpp
-    Source/Bitcrusher.h
     Source/Parameters.h
 )
 
-target_compile_definitions(CerberusGran PUBLIC
-    JUCE_WEB_BROWSER=0
-    JUCE_USE_CURL=0
-    JUCE_VST3_CAN_REPLACE_VST2=0
-)
+target_compile_definitions(CerberusGran_VST3 PRIVATE JUCE_VST3_CAN_REPLACE_VST2=0)
 
 target_link_libraries(CerberusGran PRIVATE
     juce::juce_audio_utils
@@ -56,3 +42,20 @@ target_link_libraries(CerberusGran PRIVATE
 )
 
 juce_generate_juce_header(CerberusGran)
+
+# Auto-copy to system-wide plugin directories (delete old bundle first so DAW re-reads)
+add_custom_command(TARGET CerberusGran_AU POST_BUILD
+    COMMAND ${CMAKE_COMMAND} -E rm -rf "/Library/Audio/Plug-Ins/Components/CerberusGran.component"
+    COMMAND ${CMAKE_COMMAND} -E copy_directory
+        "$<TARGET_BUNDLE_DIR:CerberusGran_AU>"
+        "/Library/Audio/Plug-Ins/Components/CerberusGran.component"
+    COMMENT "Installing AU to /Library/Audio/Plug-Ins/Components/"
+)
+
+add_custom_command(TARGET CerberusGran_VST3 POST_BUILD
+    COMMAND ${CMAKE_COMMAND} -E rm -rf "/Library/Audio/Plug-Ins/VST3/CerberusGran.vst3"
+    COMMAND ${CMAKE_COMMAND} -E copy_directory
+        "$<TARGET_BUNDLE_DIR:CerberusGran_VST3>"
+        "/Library/Audio/Plug-Ins/VST3/CerberusGran.vst3"
+    COMMENT "Installing VST3 to /Library/Audio/Plug-Ins/VST3/"
+)

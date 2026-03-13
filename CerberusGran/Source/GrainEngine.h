@@ -1,25 +1,37 @@
 #pragma once
 #include <JuceHeader.h>
 #include "GrainHead.h"
-#include "RingBuffer.h"
-
-static constexpr int kNumHeads = 5;
 
 class GrainEngine
 {
 public:
-    GrainEngine();
+    GrainEngine() = default;
 
-    void prepare (double sampleRate, int maxBlockSize);
-    void process (juce::AudioBuffer<float>& buffer, int numSamples,
-                  const RingBuffer& ringBuffer,
+    void prepare (double sampleRate, int blockSize)
+    {
+        for (auto& head : heads)
+            head.prepare (sampleRate, blockSize);
+    }
+
+    void process (juce::AudioBuffer<float>& output, int numSamples,
+                  const class RingBuffer& ringBuffer,
                   const juce::AudioBuffer<float>* sampleBuffer,
-                  bool liveMode);
+                  bool liveMode)
+    {
+        for (auto& head : heads)
+            head.process (output, numSamples, ringBuffer, sampleBuffer, liveMode);
 
-    GrainHead& getHead (int index) { return heads[index]; }
-    const GrainHead& getHead (int index) const { return heads[index]; }
+        // Soft clip output
+        for (int ch = 0; ch < output.getNumChannels(); ++ch)
+        {
+            float* data = output.getWritePointer (ch);
+            for (int i = 0; i < numSamples; ++i)
+                data[i] = std::tanh (data[i] * masterGain);
+        }
+    }
 
     void setMasterGain (float g) { masterGain = g; }
+    GrainHead& getHead (int index) { return heads[index]; }
 
 private:
     std::array<GrainHead, kNumHeads> heads;

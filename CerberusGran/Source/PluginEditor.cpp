@@ -1,208 +1,95 @@
 #include "PluginEditor.h"
 
 // ============================================================================
-// HeadPanel
+// HeadStrip — one compact row per grain head
 // ============================================================================
-static void setupRotarySlider (juce::Slider& s, const juce::String& suffix)
+static void setupLinearSlider (juce::Slider& s, const juce::String& suffix = "")
 {
-    s.setSliderStyle (juce::Slider::RotaryVerticalDrag);
-    s.setTextBoxStyle (juce::Slider::TextBoxBelow, false, 60, 16);
+    s.setSliderStyle (juce::Slider::LinearBar);
+    s.setTextBoxIsEditable (true);
     if (suffix.isNotEmpty()) s.setTextValueSuffix (suffix);
 }
 
-HeadPanel::HeadPanel (CerberusGranAudioProcessor& p, int headIndex, juce::Colour headColour)
+HeadStrip::HeadStrip (CerberusGranAudioProcessor& p, int headIndex, juce::Colour headColour)
     : processor (p), index (headIndex), colour (headColour)
 {
     auto id = [headIndex] (const juce::String& name)
     { return "head" + juce::String (headIndex) + "_" + name; };
 
-    // Title
-    titleLabel.setText ("Head " + juce::String (headIndex), juce::dontSendNotification);
-    titleLabel.setFont (juce::FontOptions (16.0f, juce::Font::bold));
-    titleLabel.setColour (juce::Label::textColourId, headColour);
-    addAndMakeVisible (titleLabel);
+    enableBtn.setButtonText (juce::String (headIndex + 1));
+    enableBtn.setColour (juce::ToggleButton::tickColourId, headColour);
+    addAndMakeVisible (enableBtn);
+    enableAttach = std::make_unique<ButtonAttach> (p.apvts, id ("enable"), enableBtn);
 
-    collapseButton.setButtonText ("+/-");
-    collapseButton.onClick = [this]
-    {
-        setCollapsed (!collapsed);
-        if (auto* parent = getParentComponent())
-            parent->resized();
-    };
-    addAndMakeVisible (collapseButton);
+    setupLinearSlider (posSlider, " %");
+    setupLinearSlider (spreadSlider, " %");
+    setupLinearSlider (rateSlider, " ms");
+    setupLinearSlider (lengthSlider, " ms");
+    setupLinearSlider (pitchSlider, " st");
+    setupLinearSlider (gainSlider, " dB");
 
-    // Enable button - reuse collapseButton area or add a toggle
-    enableAttach = std::make_unique<ButtonAttach> (p.apvts, id ("enable"), collapseButton);
+    addAndMakeVisible (posSlider);
+    addAndMakeVisible (spreadSlider);
+    addAndMakeVisible (rateSlider);
+    addAndMakeVisible (lengthSlider);
+    addAndMakeVisible (pitchSlider);
+    addAndMakeVisible (gainSlider);
 
-    // Grain knobs
-    auto setupKnob = [this] (juce::Slider& s, const juce::String& suffix = "")
-    {
-        setupRotarySlider (s, suffix);
-        addAndMakeVisible (s);
-    };
+    posAttach    = std::make_unique<SliderAttach> (p.apvts, id ("position"), posSlider);
+    spreadAttach = std::make_unique<SliderAttach> (p.apvts, id ("spread"), spreadSlider);
+    rateAttach   = std::make_unique<SliderAttach> (p.apvts, id ("rate"), rateSlider);
+    lengthAttach = std::make_unique<SliderAttach> (p.apvts, id ("length"), lengthSlider);
+    pitchAttach  = std::make_unique<SliderAttach> (p.apvts, id ("pitch"), pitchSlider);
+    gainAttach   = std::make_unique<SliderAttach> (p.apvts, id ("gain"), gainSlider);
 
-    setupKnob (positionSlider);
-    setupKnob (posScatterSlider);
-    setupKnob (densitySlider, " Hz");
-    setupKnob (durationSlider, " ms");
-    setupKnob (pitchSlider, "x");
-    setupKnob (pitchScatterSlider);
-    setupKnob (gainSlider);
-    setupKnob (panSlider);
+    shapeBox.addItemList ({ "Hann", "Gauss", "Tukey", "Tri" }, 1);
+    addAndMakeVisible (shapeBox);
+    shapeAttach = std::make_unique<ComboAttach> (p.apvts, id ("shape"), shapeBox);
 
-    windowBox.addItemList ({ "Hann", "Gaussian", "Tukey", "Triangle" }, 1);
-    addAndMakeVisible (windowBox);
-
-    // Attach grain params
-    positionAttach    = std::make_unique<SliderAttach> (p.apvts, id ("position"), positionSlider);
-    posScatterAttach  = std::make_unique<SliderAttach> (p.apvts, id ("posScatter"), posScatterSlider);
-    densityAttach     = std::make_unique<SliderAttach> (p.apvts, id ("density"), densitySlider);
-    durationAttach    = std::make_unique<SliderAttach> (p.apvts, id ("duration"), durationSlider);
-    pitchAttach       = std::make_unique<SliderAttach> (p.apvts, id ("pitch"), pitchSlider);
-    pitchScatterAttach= std::make_unique<SliderAttach> (p.apvts, id ("pitchScatter"), pitchScatterSlider);
-    gainAttach        = std::make_unique<SliderAttach> (p.apvts, id ("gain"), gainSlider);
-    panAttach         = std::make_unique<SliderAttach> (p.apvts, id ("pan"), panSlider);
-    windowAttach      = std::make_unique<ComboAttach>  (p.apvts, id ("window"), windowBox);
-
-    // Filter
-    filterBypassBtn.setButtonText ("Filter");
-    addAndMakeVisible (filterBypassBtn);
-    filterBypassAttach = std::make_unique<ButtonAttach> (p.apvts, id ("filterBypass"), filterBypassBtn);
-
-    filterTypeBox.addItemList ({ "LP", "HP", "BP" }, 1);
-    addAndMakeVisible (filterTypeBox);
-    filterTypeAttach = std::make_unique<ComboAttach> (p.apvts, id ("filterType"), filterTypeBox);
-
-    setupKnob (filterCutoffSlider, " Hz");
-    setupKnob (filterResSlider);
-    filterCutoffAttach = std::make_unique<SliderAttach> (p.apvts, id ("filterCutoff"), filterCutoffSlider);
-    filterResAttach    = std::make_unique<SliderAttach> (p.apvts, id ("filterRes"), filterResSlider);
-
-    // Saturator
-    satBypassBtn.setButtonText ("Sat");
-    addAndMakeVisible (satBypassBtn);
-    satBypassAttach = std::make_unique<ButtonAttach> (p.apvts, id ("satBypass"), satBypassBtn);
-
-    setupKnob (satDriveSlider, "x");
-    satDriveAttach = std::make_unique<SliderAttach> (p.apvts, id ("satDrive"), satDriveSlider);
-
-    // Bitcrusher
-    crushBypassBtn.setButtonText ("Crush");
-    addAndMakeVisible (crushBypassBtn);
-    crushBypassAttach = std::make_unique<ButtonAttach> (p.apvts, id ("crushBypass"), crushBypassBtn);
-
-    setupKnob (crushBitsSlider, " bit");
-    setupKnob (crushRateSlider);
-    crushBitsAttach = std::make_unique<SliderAttach> (p.apvts, id ("crushBits"), crushBitsSlider);
-    crushRateAttach = std::make_unique<SliderAttach> (p.apvts, id ("crushRate"), crushRateSlider);
-
-    // Delay
-    delayBypassBtn.setButtonText ("Delay");
-    addAndMakeVisible (delayBypassBtn);
-    delayBypassAttach = std::make_unique<ButtonAttach> (p.apvts, id ("delayBypass"), delayBypassBtn);
-
-    setupKnob (delayTimeSlider, " ms");
-    setupKnob (delayFeedbackSlider);
-    setupKnob (delayMixSlider);
-    delayTimeAttach     = std::make_unique<SliderAttach> (p.apvts, id ("delayTime"), delayTimeSlider);
-    delayFeedbackAttach = std::make_unique<SliderAttach> (p.apvts, id ("delayFeedback"), delayFeedbackSlider);
-    delayMixAttach      = std::make_unique<SliderAttach> (p.apvts, id ("delayMix"), delayMixSlider);
-
-    // LFO
-    setupKnob (lfoRateSlider, " Hz");
-    setupKnob (lfoDepthSlider);
-    lfoRateAttach  = std::make_unique<SliderAttach> (p.apvts, id ("lfoRate"), lfoRateSlider);
-    lfoDepthAttach = std::make_unique<SliderAttach> (p.apvts, id ("lfoDepth"), lfoDepthSlider);
-
-    lfoShapeBox.addItemList ({ "Sine", "Tri", "Saw", "Sq", "S&H" }, 1);
-    addAndMakeVisible (lfoShapeBox);
-    lfoShapeAttach = std::make_unique<ComboAttach> (p.apvts, id ("lfoShape"), lfoShapeBox);
-
-    lfoTargetBox.addItemList ({ "Off", "Position", "Pitch", "Cutoff" }, 1);
-    addAndMakeVisible (lfoTargetBox);
-    lfoTargetAttach = std::make_unique<ComboAttach> (p.apvts, id ("lfoTarget"), lfoTargetBox);
+    reverseBtn.setButtonText ("R");
+    addAndMakeVisible (reverseBtn);
+    reverseAttach = std::make_unique<ButtonAttach> (p.apvts, id ("reverse"), reverseBtn);
 }
 
-void HeadPanel::paint (juce::Graphics& g)
+void HeadStrip::paint (juce::Graphics& g)
 {
-    auto bounds = getLocalBounds().toFloat();
-    g.setColour (colour.withAlpha (0.08f));
-    g.fillRoundedRectangle (bounds, 6.0f);
-    g.setColour (colour.withAlpha (0.4f));
-    g.drawRoundedRectangle (bounds.reduced (1.0f), 6.0f, 1.0f);
+    g.setColour (colour.withAlpha (0.06f));
+    g.fillRoundedRectangle (getLocalBounds().toFloat(), 4.0f);
+    g.setColour (colour.withAlpha (0.25f));
+    g.drawRoundedRectangle (getLocalBounds().toFloat().reduced (0.5f), 4.0f, 1.0f);
 }
 
-void HeadPanel::resized()
+void HeadStrip::resized()
 {
-    auto area = getLocalBounds().reduced (6);
-    auto topRow = area.removeFromTop (24);
-    titleLabel.setBounds (topRow.removeFromLeft (80));
-    collapseButton.setBounds (topRow.removeFromRight (40));
+    auto area = getLocalBounds().reduced (4, 2);
 
-    if (collapsed) return;
+    enableBtn.setBounds (area.removeFromLeft (36));
+    area.removeFromLeft (4);
 
-    int knobW = 65, knobH = 70;
+    int sliderW = (area.getWidth() - 80 - 30 - 20) / 6; // 6 sliders, shape box, reverse btn, gaps
 
-    // Row 1: Grain knobs
-    auto row1 = area.removeFromTop (knobH);
-    positionSlider.setBounds (row1.removeFromLeft (knobW));
-    posScatterSlider.setBounds (row1.removeFromLeft (knobW));
-    densitySlider.setBounds (row1.removeFromLeft (knobW));
-    durationSlider.setBounds (row1.removeFromLeft (knobW));
-    pitchSlider.setBounds (row1.removeFromLeft (knobW));
-    pitchScatterSlider.setBounds (row1.removeFromLeft (knobW));
-    gainSlider.setBounds (row1.removeFromLeft (knobW));
-    panSlider.setBounds (row1.removeFromLeft (knobW));
-    windowBox.setBounds (row1.removeFromLeft (80).withHeight (24));
+    posSlider.setBounds (area.removeFromLeft (sliderW));
+    area.removeFromLeft (2);
+    spreadSlider.setBounds (area.removeFromLeft (sliderW));
+    area.removeFromLeft (2);
+    rateSlider.setBounds (area.removeFromLeft (sliderW));
+    area.removeFromLeft (2);
+    lengthSlider.setBounds (area.removeFromLeft (sliderW));
+    area.removeFromLeft (2);
+    pitchSlider.setBounds (area.removeFromLeft (sliderW));
+    area.removeFromLeft (2);
 
-    // Row 2: DSP chain
-    auto row2 = area.removeFromTop (knobH);
+    shapeBox.setBounds (area.removeFromLeft (70));
+    area.removeFromLeft (2);
 
-    // Filter section
-    filterBypassBtn.setBounds (row2.removeFromLeft (50).withHeight (22));
-    filterTypeBox.setBounds (row2.removeFromLeft (45).withHeight (22));
-    filterCutoffSlider.setBounds (row2.removeFromLeft (knobW));
-    filterResSlider.setBounds (row2.removeFromLeft (knobW));
+    reverseBtn.setBounds (area.removeFromLeft (28));
+    area.removeFromLeft (2);
 
-    row2.removeFromLeft (8);
-
-    // Saturator
-    satBypassBtn.setBounds (row2.removeFromLeft (40).withHeight (22));
-    satDriveSlider.setBounds (row2.removeFromLeft (knobW));
-
-    row2.removeFromLeft (8);
-
-    // Bitcrusher
-    crushBypassBtn.setBounds (row2.removeFromLeft (50).withHeight (22));
-    crushBitsSlider.setBounds (row2.removeFromLeft (knobW));
-    crushRateSlider.setBounds (row2.removeFromLeft (knobW));
-
-    row2.removeFromLeft (8);
-
-    // Delay
-    delayBypassBtn.setBounds (row2.removeFromLeft (50).withHeight (22));
-    delayTimeSlider.setBounds (row2.removeFromLeft (knobW));
-    delayFeedbackSlider.setBounds (row2.removeFromLeft (knobW));
-    delayMixSlider.setBounds (row2.removeFromLeft (knobW));
-
-    // Row 3: LFO
-    auto row3 = area.removeFromTop (knobH);
-    auto lfoLabel = row3.removeFromLeft (30);
-    lfoRateSlider.setBounds (row3.removeFromLeft (knobW));
-    lfoDepthSlider.setBounds (row3.removeFromLeft (knobW));
-    lfoShapeBox.setBounds (row3.removeFromLeft (60).withHeight (22));
-    row3.removeFromLeft (4);
-    lfoTargetBox.setBounds (row3.removeFromLeft (80).withHeight (22));
-}
-
-void HeadPanel::setupSlider (juce::Slider& s, const juce::String& suffix)
-{
-    setupRotarySlider (s, suffix);
-    addAndMakeVisible (s);
+    gainSlider.setBounds (area);
 }
 
 // ============================================================================
-// CerberusGranAudioProcessorEditor
+// Main Editor
 // ============================================================================
 CerberusGranAudioProcessorEditor::CerberusGranAudioProcessorEditor (CerberusGranAudioProcessor& p)
     : juce::AudioProcessorEditor (&p),
@@ -217,28 +104,33 @@ CerberusGranAudioProcessorEditor::CerberusGranAudioProcessorEditor (CerberusGran
         juce::Colour (0xffab47bc)   // Violet
     };
 
-    for (int i = 0; i < kNumHeads; ++i)
+    for (int i = 0; i < kNumHeadStrips; ++i)
     {
-        auto* panel = new HeadPanel (p, i, headColours[i]);
-        headPanels.add (panel);
-        headContainer.addAndMakeVisible (panel);
+        auto* strip = new HeadStrip (p, i, headColours[i]);
+        headStrips.add (strip);
+        addAndMakeVisible (strip);
     }
 
-    headViewport.setViewedComponent (&headContainer, false);
-    headViewport.setScrollBarsShown (true, false);
-    addAndMakeVisible (headViewport);
-
     // Global controls
-    setupSlider (masterGainSlider);
-    setupSlider (dryWetSlider);
+    setupLinearSlider (masterGainSlider);
+    masterGainSlider.setTextValueSuffix ("x");
+    addAndMakeVisible (masterGainSlider);
     masterGainAttach = std::make_unique<SliderAttach> (p.apvts, "masterGain", masterGainSlider);
-    dryWetAttach     = std::make_unique<SliderAttach> (p.apvts, "dryWet", dryWetSlider);
+
+    setupLinearSlider (mixSlider);
+    mixSlider.setTextValueSuffix (" %");
+    addAndMakeVisible (mixSlider);
+    mixAttach = std::make_unique<SliderAttach> (p.apvts, "mix", mixSlider);
+
+    freezeBtn.setButtonText ("Freeze");
+    addAndMakeVisible (freezeBtn);
+    freezeAttach = std::make_unique<ButtonAttach> (p.apvts, "freeze", freezeBtn);
 
     sourceModeBox.addItemList ({ "Live", "File" }, 1);
     addAndMakeVisible (sourceModeBox);
     sourceModeAttach = std::make_unique<ComboAttach> (p.apvts, "sourceMode", sourceModeBox);
 
-    setSize (1000, 700);
+    setSize (820, 560);
     startTimerHz (30);
 }
 
@@ -247,146 +139,237 @@ CerberusGranAudioProcessorEditor::~CerberusGranAudioProcessorEditor()
     stopTimer();
 }
 
-void CerberusGranAudioProcessorEditor::setupSlider (juce::Slider& s, const juce::String& suffix)
-{
-    setupRotarySlider (s, suffix);
-    addAndMakeVisible (s);
-}
-
 void CerberusGranAudioProcessorEditor::paint (juce::Graphics& g)
 {
-    g.fillAll (juce::Colour (0xff1a1a2e));
+    g.fillAll (juce::Colour (0xfff0ebe3));  // Warm cream background
 
     // Waveform area
-    auto waveformArea = getLocalBounds().removeFromTop (120).reduced (8);
+    auto waveformArea = getLocalBounds().removeFromTop (220).reduced (10);
 
     if (dragOver)
     {
-        g.setColour (juce::Colours::white.withAlpha (0.1f));
-        g.fillRect (waveformArea);
+        g.setColour (juce::Colours::black.withAlpha (0.05f));
+        g.fillRoundedRectangle (waveformArea.toFloat(), 6.0f);
     }
 
-    g.setColour (juce::Colour (0xff2a2a4e));
-    g.fillRect (waveformArea);
-    g.setColour (juce::Colours::white.withAlpha (0.3f));
-    g.drawRect (waveformArea);
+    g.setColour (juce::Colour (0xffe8e0d4));
+    g.fillRoundedRectangle (waveformArea.toFloat(), 6.0f);
+    g.setColour (juce::Colour (0xffc0b8a8));
+    g.drawRoundedRectangle (waveformArea.toFloat(), 6.0f, 1.0f);
 
-    if (fileLoaded && thumbnail.getTotalLength() > 0.0)
+    bool isLive = (audioProcessor.getSourceMode() == AudioSourceMode::Live);
+
+    if (isLive)
     {
-        g.setColour (juce::Colour (0xff4ecdc4));
-        thumbnail.drawChannels (g, waveformArea, 0.0, thumbnail.getTotalLength(), 1.0f);
+        // Draw live scrolling waveform from ring buffer
+        auto inner = waveformArea.reduced (4);
+        float midY = inner.getCentreY();
+        float halfH = inner.getHeight() * 0.5f;
+        int w = inner.getWidth();
+
+        juce::Path waveformPath;
+        bool pathStarted = false;
+
+        for (int px = 0; px < w; ++px)
+        {
+            int idx = (px * kWaveformPoints) / w;
+            if (idx >= kWaveformPoints) idx = kWaveformPoints - 1;
+
+            float amp = liveWaveform[idx];
+            float y = midY - amp * halfH;
+
+            if (!pathStarted)
+            {
+                waveformPath.startNewSubPath (static_cast<float> (inner.getX() + px), y);
+                pathStarted = true;
+            }
+            else
+            {
+                waveformPath.lineTo (static_cast<float> (inner.getX() + px), y);
+            }
+        }
+
+        // Mirror for bottom half
+        for (int px = w - 1; px >= 0; --px)
+        {
+            int idx = (px * kWaveformPoints) / w;
+            if (idx >= kWaveformPoints) idx = kWaveformPoints - 1;
+
+            float amp = liveWaveform[idx];
+            float y = midY + amp * halfH;
+            waveformPath.lineTo (static_cast<float> (inner.getX() + px), y);
+        }
+
+        waveformPath.closeSubPath();
+        g.setColour (juce::Colour (0xff3a3a3a).withAlpha (0.7f));
+        g.fillPath (waveformPath);
+        g.setColour (juce::Colour (0xff3a3a3a));
+        g.strokePath (waveformPath, juce::PathStrokeType (1.0f));
+    }
+    else if (fileLoaded && thumbnail.getTotalLength() > 0.0)
+    {
+        // Draw static file waveform
+        g.setColour (juce::Colour (0xff3a3a3a));
+        thumbnail.drawChannels (g, waveformArea.reduced (4), 0.0, thumbnail.getTotalLength(), 1.0f);
     }
     else
     {
-        g.setColour (juce::Colours::white.withAlpha (0.3f));
+        g.setColour (juce::Colour (0xff8a8070));
         g.setFont (14.0f);
-        g.drawFittedText ("Drop audio file here | Live mode captures DAW input",
+        g.drawFittedText ("Drop audio file here  |  Live mode captures DAW input",
                           waveformArea, juce::Justification::centred, 1);
     }
 
-    // Draw position markers for each head
-    for (int i = 0; i < kNumHeads; ++i)
+    // Draw head position markers on waveform
+    for (int i = 0; i < kNumHeadStrips; ++i)
     {
         auto* enabledParam = audioProcessor.apvts.getRawParameterValue ("head" + juce::String (i) + "_enable");
         if (enabledParam == nullptr || enabledParam->load() < 0.5f)
             continue;
 
-        float pos = *audioProcessor.apvts.getRawParameterValue (
-            "head" + juce::String (i) + "_position");
-        int x = waveformArea.getX() + static_cast<int> (pos * waveformArea.getWidth());
+        float pos = *audioProcessor.apvts.getRawParameterValue ("head" + juce::String (i) + "_position");
+        float normPos = pos / 100.0f;
+        int x = waveformArea.getX() + static_cast<int> (normPos * waveformArea.getWidth());
 
         g.setColour (headColours[i].withAlpha (0.8f));
         g.drawVerticalLine (x, static_cast<float> (waveformArea.getY()),
                            static_cast<float> (waveformArea.getBottom()));
 
-        // Scatter range
-        float scatter = *audioProcessor.apvts.getRawParameterValue (
-            "head" + juce::String (i) + "_posScatter");
-        if (scatter > 0.01f)
+        // Draw play head triangle
+        juce::Path triangle;
+        float ty = static_cast<float> (waveformArea.getBottom()) - 14.0f;
+        triangle.addTriangle (static_cast<float> (x) - 5.0f, ty + 10.0f,
+                              static_cast<float> (x) + 5.0f, ty + 10.0f,
+                              static_cast<float> (x), ty);
+        g.setColour (headColours[i]);
+        g.fillPath (triangle);
+
+        // Spread range
+        float spread = *audioProcessor.apvts.getRawParameterValue ("head" + juce::String (i) + "_spread");
+        if (spread > 0.5f)
         {
-            int scatterPx = static_cast<int> (scatter * waveformArea.getWidth());
-            g.setColour (headColours[i].withAlpha (0.15f));
-            g.fillRect (x - scatterPx, waveformArea.getY(), scatterPx * 2, waveformArea.getHeight());
+            int spreadPx = static_cast<int> ((spread / 100.0f) * waveformArea.getWidth());
+            g.setColour (headColours[i].withAlpha (0.12f));
+            g.fillRect (x - spreadPx, waveformArea.getY(), spreadPx * 2, waveformArea.getHeight());
         }
     }
 
-    // Bottom bar label
-    auto bottomBar = getLocalBounds().removeFromBottom (50);
-    g.setColour (juce::Colour (0xff12122e));
+    // Column headers above head strips
+    auto headerArea = getLocalBounds();
+    headerArea.removeFromTop (220);
+    auto headerRow = headerArea.removeFromTop (18).reduced (10, 0);
+
+    g.setColour (juce::Colour (0xff6a6050));
+    g.setFont (juce::FontOptions (11.0f, juce::Font::bold));
+
+    headerRow.removeFromLeft (40); // enable btn space
+    int colW = (headerRow.getWidth() - 80 - 30 - 20) / 6;
+
+    g.drawText ("position",  headerRow.removeFromLeft (colW), juce::Justification::centred); headerRow.removeFromLeft (2);
+    g.drawText ("spread",    headerRow.removeFromLeft (colW), juce::Justification::centred); headerRow.removeFromLeft (2);
+    g.drawText ("rate",      headerRow.removeFromLeft (colW), juce::Justification::centred); headerRow.removeFromLeft (2);
+    g.drawText ("length",    headerRow.removeFromLeft (colW), juce::Justification::centred); headerRow.removeFromLeft (2);
+    g.drawText ("pitch",     headerRow.removeFromLeft (colW), juce::Justification::centred); headerRow.removeFromLeft (2);
+    g.drawText ("shape",     headerRow.removeFromLeft (70),   juce::Justification::centred); headerRow.removeFromLeft (2);
+    headerRow.removeFromLeft (30); // reverse
+    g.drawText ("gain",      headerRow, juce::Justification::centred);
+
+    // Bottom bar background
+    auto bottomBar = getLocalBounds().removeFromBottom (44);
+    g.setColour (juce::Colour (0xffe0d8cc));
     g.fillRect (bottomBar);
-    g.setColour (juce::Colours::white.withAlpha (0.5f));
-    g.setFont (12.0f);
+    g.setColour (juce::Colour (0xff6a6050));
+    g.setFont (juce::FontOptions (13.0f, juce::Font::bold));
     g.drawText ("CerberusGran", bottomBar.removeFromLeft (120), juce::Justification::centred);
 }
 
 void CerberusGranAudioProcessorEditor::resized()
 {
     auto area = getLocalBounds();
-    area.removeFromTop (120); // Waveform
-    auto bottomBar = area.removeFromBottom (50);
+    area.removeFromTop (220);   // waveform
+    area.removeFromTop (18);    // column headers
 
-    // Bottom controls
-    auto ctrl = bottomBar.reduced (8, 8);
-    ctrl.removeFromLeft (120); // Logo space
-    masterGainSlider.setBounds (ctrl.removeFromLeft (65));
-    dryWetSlider.setBounds (ctrl.removeFromLeft (65));
-    sourceModeBox.setBounds (ctrl.removeFromRight (90).withHeight (24).withY (ctrl.getY() + 6));
+    auto bottomBar = area.removeFromBottom (44);
 
-    // Head panels in scrollable viewport
-    headViewport.setBounds (area);
-
-    int panelHeight = 240;
-    int collapsedHeight = 32;
-    int totalH = 0;
-
-    for (auto* panel : headPanels)
+    // Head strips
+    for (auto* strip : headStrips)
     {
-        int h = panel->isCollapsed() ? collapsedHeight : panelHeight;
-        panel->setBounds (0, totalH, headViewport.getWidth() - 14, h);
-        totalH += h + 4;
+        strip->setBounds (area.removeFromTop (36).reduced (10, 2));
     }
 
-    headContainer.setSize (headViewport.getWidth() - 14, totalH);
+    // Bottom bar controls
+    auto ctrl = bottomBar.reduced (10, 8);
+    ctrl.removeFromLeft (120); // logo space
+
+    auto leftCtrl = ctrl.removeFromLeft (300);
+    freezeBtn.setBounds (leftCtrl.removeFromLeft (70));
+    leftCtrl.removeFromLeft (8);
+    sourceModeBox.setBounds (leftCtrl.removeFromLeft (70).withHeight (24).withY (leftCtrl.getY()));
+
+    auto rightCtrl = ctrl.removeFromRight (240);
+    auto gainArea = rightCtrl.removeFromLeft (110);
+    masterGainSlider.setBounds (gainArea.withHeight (24).withY (rightCtrl.getY()));
+    rightCtrl.removeFromLeft (8);
+    mixSlider.setBounds (rightCtrl.withHeight (24).withY (rightCtrl.getY()));
+}
+
+void CerberusGranAudioProcessorEditor::updateLiveWaveform()
+{
+    auto& rb = audioProcessor.getRingBuffer();
+    int ringSize = rb.getBufferSize();
+    if (ringSize == 0) return;
+
+    int wp = rb.getWritePosition();
+
+    // Read the most recent ringSize samples, downsampled to kWaveformPoints
+    int samplesPerPoint = juce::jmax (1, ringSize / kWaveformPoints);
+
+    for (int i = 0; i < kWaveformPoints; ++i)
+    {
+        // Walk backwards from write position
+        int startSample = wp - ringSize + i * samplesPerPoint;
+
+        float maxVal = 0.0f;
+        for (int s = 0; s < samplesPerPoint; ++s)
+        {
+            float v = rb.readSample (0, static_cast<double> (startSample + s));
+            float absV = std::fabs (v);
+            if (absV > maxVal) maxVal = absV;
+        }
+        liveWaveform[i] = maxVal;
+    }
 }
 
 void CerberusGranAudioProcessorEditor::timerCallback()
 {
-    repaint (getLocalBounds().removeFromTop (120)); // Just repaint waveform area for position markers
+    if (audioProcessor.getSourceMode() == AudioSourceMode::Live)
+        updateLiveWaveform();
+
+    repaint (getLocalBounds().removeFromTop (220));
 }
 
 bool CerberusGranAudioProcessorEditor::isInterestedInFileDrag (const juce::StringArray& files)
 {
     for (auto& f : files)
-    {
         if (f.endsWith (".wav") || f.endsWith (".aif") || f.endsWith (".aiff") ||
             f.endsWith (".mp3") || f.endsWith (".flac") || f.endsWith (".ogg"))
             return true;
-    }
     return false;
 }
 
 void CerberusGranAudioProcessorEditor::fileDragEnter (const juce::StringArray& files, int, int)
 {
-    if (isInterestedInFileDrag (files))
-    {
-        dragOver = true;
-        repaint (getLocalBounds().removeFromTop (120));
-    }
+    if (isInterestedInFileDrag (files)) { dragOver = true; repaint(); }
 }
 
 void CerberusGranAudioProcessorEditor::fileDragExit (const juce::StringArray&)
 {
-    if (dragOver)
-    {
-        dragOver = false;
-        repaint (getLocalBounds().removeFromTop (120));
-    }
+    if (dragOver) { dragOver = false; repaint(); }
 }
 
 void CerberusGranAudioProcessorEditor::filesDropped (const juce::StringArray& files, int, int)
 {
     dragOver = false;
-
     for (auto& f : files)
     {
         juce::File file (f);

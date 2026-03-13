@@ -2,65 +2,33 @@
 #include <JuceHeader.h>
 #include "PluginProcessor.h"
 
-class HeadPanel : public juce::Component
+class HeadStrip : public juce::Component
 {
 public:
-    HeadPanel (CerberusGranAudioProcessor& p, int headIndex, juce::Colour headColour);
-    ~HeadPanel() override = default;
+    HeadStrip (CerberusGranAudioProcessor& p, int headIndex, juce::Colour headColour);
+    ~HeadStrip() override = default;
 
     void paint (juce::Graphics& g) override;
     void resized() override;
-
-    void setCollapsed (bool c) { collapsed = c; resized(); }
-    bool isCollapsed() const { return collapsed; }
 
 private:
     CerberusGranAudioProcessor& processor;
     int index;
     juce::Colour colour;
-    bool collapsed = false;
 
-    juce::TextButton collapseButton;
-    juce::Label titleLabel;
+    juce::ToggleButton enableBtn;
+    juce::Slider posSlider, spreadSlider, rateSlider, lengthSlider, pitchSlider, gainSlider;
+    juce::ComboBox shapeBox;
+    juce::ToggleButton reverseBtn;
 
-    // Grain knobs
-    juce::Slider positionSlider, posScatterSlider, densitySlider, durationSlider;
-    juce::Slider pitchSlider, pitchScatterSlider, gainSlider, panSlider;
-    juce::ComboBox windowBox;
-
-    // DSP controls
-    juce::ToggleButton filterBypassBtn, satBypassBtn, crushBypassBtn, delayBypassBtn;
-    juce::ComboBox filterTypeBox;
-    juce::Slider filterCutoffSlider, filterResSlider;
-    juce::Slider satDriveSlider;
-    juce::Slider crushBitsSlider, crushRateSlider;
-    juce::Slider delayTimeSlider, delayFeedbackSlider, delayMixSlider;
-
-    // LFO
-    juce::Slider lfoRateSlider, lfoDepthSlider;
-    juce::ComboBox lfoShapeBox, lfoTargetBox;
-
-    // APVTS attachments
     using SliderAttach = juce::AudioProcessorValueTreeState::SliderAttachment;
     using ButtonAttach = juce::AudioProcessorValueTreeState::ButtonAttachment;
     using ComboAttach  = juce::AudioProcessorValueTreeState::ComboBoxAttachment;
 
     std::unique_ptr<ButtonAttach> enableAttach;
-    std::unique_ptr<SliderAttach> positionAttach, posScatterAttach, densityAttach, durationAttach;
-    std::unique_ptr<SliderAttach> pitchAttach, pitchScatterAttach, gainAttach, panAttach;
-    std::unique_ptr<ComboAttach>  windowAttach;
-
-    std::unique_ptr<ButtonAttach> filterBypassAttach, satBypassAttach, crushBypassAttach, delayBypassAttach;
-    std::unique_ptr<ComboAttach>  filterTypeAttach;
-    std::unique_ptr<SliderAttach> filterCutoffAttach, filterResAttach;
-    std::unique_ptr<SliderAttach> satDriveAttach;
-    std::unique_ptr<SliderAttach> crushBitsAttach, crushRateAttach;
-    std::unique_ptr<SliderAttach> delayTimeAttach, delayFeedbackAttach, delayMixAttach;
-
-    std::unique_ptr<SliderAttach> lfoRateAttach, lfoDepthAttach;
-    std::unique_ptr<ComboAttach>  lfoShapeAttach, lfoTargetAttach;
-
-    void setupSlider (juce::Slider& s, const juce::String& suffix = "");
+    std::unique_ptr<SliderAttach> posAttach, spreadAttach, rateAttach, lengthAttach, pitchAttach, gainAttach;
+    std::unique_ptr<ComboAttach>  shapeAttach;
+    std::unique_ptr<ButtonAttach> reverseAttach;
 };
 
 class CerberusGranAudioProcessorEditor : public juce::AudioProcessorEditor,
@@ -87,25 +55,27 @@ private:
     bool fileLoaded = false;
     bool dragOver = false;
 
-    // Head panels
-    static constexpr int kNumHeads = 5;
-    std::array<juce::Colour, kNumHeads> headColours;
-    juce::OwnedArray<HeadPanel> headPanels;
+    // Live waveform display buffer (downsampled for drawing)
+    static constexpr int kWaveformPoints = 800;
+    std::array<float, kWaveformPoints> liveWaveform {};
+    void updateLiveWaveform();
+
+    static constexpr int kNumHeadStrips = 5;
+    std::array<juce::Colour, kNumHeadStrips> headColours;
+    juce::OwnedArray<HeadStrip> headStrips;
 
     // Global controls
-    juce::Slider masterGainSlider, dryWetSlider;
+    juce::Slider masterGainSlider, mixSlider;
+    juce::ToggleButton freezeBtn;
     juce::ComboBox sourceModeBox;
 
     using SliderAttach = juce::AudioProcessorValueTreeState::SliderAttachment;
+    using ButtonAttach = juce::AudioProcessorValueTreeState::ButtonAttachment;
     using ComboAttach  = juce::AudioProcessorValueTreeState::ComboBoxAttachment;
-    std::unique_ptr<SliderAttach> masterGainAttach, dryWetAttach;
+
+    std::unique_ptr<SliderAttach> masterGainAttach, mixAttach;
+    std::unique_ptr<ButtonAttach> freezeAttach;
     std::unique_ptr<ComboAttach>  sourceModeAttach;
-
-    // Viewport for head panels
-    juce::Viewport headViewport;
-    juce::Component headContainer;
-
-    void setupSlider (juce::Slider& s, const juce::String& suffix = "");
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (CerberusGranAudioProcessorEditor)
 };
