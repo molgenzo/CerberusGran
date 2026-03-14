@@ -49,6 +49,20 @@ HeadStrip::HeadStrip (CerberusGranAudioProcessor& p, int headIndex, juce::Colour
     reverseBtn.setButtonText ("R");
     addAndMakeVisible (reverseBtn);
     reverseAttach = std::make_unique<ButtonAttach> (p.apvts, id ("reverse"), reverseBtn);
+
+    // Filter controls
+    filterTypeBox.addItemList ({ "Off", "LPF", "HPF", "BPF" }, 1);
+    addAndMakeVisible (filterTypeBox);
+    filterTypeAttach = std::make_unique<ComboAttach> (p.apvts, id ("filterType"), filterTypeBox);
+
+    setupLinearSlider (cutoffSlider, " Hz");
+    addAndMakeVisible (cutoffSlider);
+    cutoffAttach = std::make_unique<SliderAttach> (p.apvts, id ("filterCutoff"), cutoffSlider);
+
+    setupLinearSlider (qSlider);
+    qSlider.setTextValueSuffix (" Q");
+    addAndMakeVisible (qSlider);
+    qAttach = std::make_unique<SliderAttach> (p.apvts, id ("filterQ"), qSlider);
 }
 
 void HeadStrip::paint (juce::Graphics& g)
@@ -66,26 +80,30 @@ void HeadStrip::resized()
     enableBtn.setBounds (area.removeFromLeft (36));
     area.removeFromLeft (4);
 
-    int sliderW = (area.getWidth() - 80 - 30 - 20) / 6; // 6 sliders, shape box, reverse btn, gaps
+    // Fixed-width items: shapeBox(70) + reverseBtn(28) + filterTypeBox(58) + gaps
+    constexpr int shapeW = 70;
+    constexpr int revW   = 28;
+    constexpr int fTypeW = 58;
+    constexpr int fixedW = shapeW + revW + fTypeW;
+    constexpr int numSliders = 8;  // pos, spread, rate, length, pitch, cutoff, Q, gain
+    constexpr int numGaps = numSliders + 2;  // gaps between all items
 
-    posSlider.setBounds (area.removeFromLeft (sliderW));
-    area.removeFromLeft (2);
-    spreadSlider.setBounds (area.removeFromLeft (sliderW));
-    area.removeFromLeft (2);
-    rateSlider.setBounds (area.removeFromLeft (sliderW));
-    area.removeFromLeft (2);
-    lengthSlider.setBounds (area.removeFromLeft (sliderW));
-    area.removeFromLeft (2);
-    pitchSlider.setBounds (area.removeFromLeft (sliderW));
-    area.removeFromLeft (2);
+    int sliderW = (area.getWidth() - fixedW - numGaps * 2) / numSliders;
 
-    shapeBox.setBounds (area.removeFromLeft (70));
-    area.removeFromLeft (2);
+    posSlider.setBounds    (area.removeFromLeft (sliderW)); area.removeFromLeft (2);
+    spreadSlider.setBounds (area.removeFromLeft (sliderW)); area.removeFromLeft (2);
+    rateSlider.setBounds   (area.removeFromLeft (sliderW)); area.removeFromLeft (2);
+    lengthSlider.setBounds (area.removeFromLeft (sliderW)); area.removeFromLeft (2);
+    pitchSlider.setBounds  (area.removeFromLeft (sliderW)); area.removeFromLeft (2);
 
-    reverseBtn.setBounds (area.removeFromLeft (28));
-    area.removeFromLeft (2);
+    shapeBox.setBounds     (area.removeFromLeft (shapeW));  area.removeFromLeft (2);
+    reverseBtn.setBounds   (area.removeFromLeft (revW));    area.removeFromLeft (2);
 
-    gainSlider.setBounds (area);
+    filterTypeBox.setBounds (area.removeFromLeft (fTypeW)); area.removeFromLeft (2);
+    cutoffSlider.setBounds  (area.removeFromLeft (sliderW)); area.removeFromLeft (2);
+    qSlider.setBounds       (area.removeFromLeft (sliderW)); area.removeFromLeft (2);
+
+    gainSlider.setBounds (area);  // remaining space
 }
 
 // ============================================================================
@@ -130,7 +148,7 @@ CerberusGranAudioProcessorEditor::CerberusGranAudioProcessorEditor (CerberusGran
     addAndMakeVisible (sourceModeBox);
     sourceModeAttach = std::make_unique<ComboAttach> (p.apvts, "sourceMode", sourceModeBox);
 
-    setSize (820, 560);
+    setSize (1020, 560);
     startTimerHz (30);
 }
 
@@ -161,7 +179,6 @@ void CerberusGranAudioProcessorEditor::paint (juce::Graphics& g)
 
     if (isLive)
     {
-        // Draw live scrolling waveform from ring buffer
         auto inner = waveformArea.reduced (4);
         float midY = inner.getCentreY();
         float halfH = inner.getHeight() * 0.5f;
@@ -189,7 +206,6 @@ void CerberusGranAudioProcessorEditor::paint (juce::Graphics& g)
             }
         }
 
-        // Mirror for bottom half
         for (int px = w - 1; px >= 0; --px)
         {
             int idx = (px * kWaveformPoints) / w;
@@ -208,7 +224,6 @@ void CerberusGranAudioProcessorEditor::paint (juce::Graphics& g)
     }
     else if (fileLoaded && thumbnail.getTotalLength() > 0.0)
     {
-        // Draw static file waveform
         g.setColour (juce::Colour (0xff3a3a3a));
         thumbnail.drawChannels (g, waveformArea.reduced (4), 0.0, thumbnail.getTotalLength(), 1.0f);
     }
@@ -235,7 +250,6 @@ void CerberusGranAudioProcessorEditor::paint (juce::Graphics& g)
         g.drawVerticalLine (x, static_cast<float> (waveformArea.getY()),
                            static_cast<float> (waveformArea.getBottom()));
 
-        // Draw play head triangle
         juce::Path triangle;
         float ty = static_cast<float> (waveformArea.getBottom()) - 14.0f;
         triangle.addTriangle (static_cast<float> (x) - 5.0f, ty + 10.0f,
@@ -244,7 +258,6 @@ void CerberusGranAudioProcessorEditor::paint (juce::Graphics& g)
         g.setColour (headColours[i]);
         g.fillPath (triangle);
 
-        // Spread range
         float spread = *audioProcessor.apvts.getRawParameterValue ("head" + juce::String (i) + "_spread");
         if (spread > 0.5f)
         {
@@ -263,15 +276,25 @@ void CerberusGranAudioProcessorEditor::paint (juce::Graphics& g)
     g.setFont (juce::FontOptions (11.0f, juce::Font::bold));
 
     headerRow.removeFromLeft (40); // enable btn space
-    int colW = (headerRow.getWidth() - 80 - 30 - 20) / 6;
+
+    constexpr int shapeW = 70;
+    constexpr int revW   = 28;
+    constexpr int fTypeW = 58;
+    constexpr int fixedW = shapeW + revW + fTypeW;
+    constexpr int numSliders = 8;
+    constexpr int numGaps = numSliders + 2;
+    int colW = (headerRow.getWidth() - fixedW - numGaps * 2) / numSliders;
 
     g.drawText ("position",  headerRow.removeFromLeft (colW), juce::Justification::centred); headerRow.removeFromLeft (2);
     g.drawText ("spread",    headerRow.removeFromLeft (colW), juce::Justification::centred); headerRow.removeFromLeft (2);
     g.drawText ("rate",      headerRow.removeFromLeft (colW), juce::Justification::centred); headerRow.removeFromLeft (2);
     g.drawText ("length",    headerRow.removeFromLeft (colW), juce::Justification::centred); headerRow.removeFromLeft (2);
     g.drawText ("pitch",     headerRow.removeFromLeft (colW), juce::Justification::centred); headerRow.removeFromLeft (2);
-    g.drawText ("shape",     headerRow.removeFromLeft (70),   juce::Justification::centred); headerRow.removeFromLeft (2);
-    headerRow.removeFromLeft (30); // reverse
+    g.drawText ("shape",     headerRow.removeFromLeft (shapeW), juce::Justification::centred); headerRow.removeFromLeft (2);
+    headerRow.removeFromLeft (revW + 2); // reverse btn (no header label needed)
+    g.drawText ("filter",    headerRow.removeFromLeft (fTypeW), juce::Justification::centred); headerRow.removeFromLeft (2);
+    g.drawText ("cutoff",    headerRow.removeFromLeft (colW), juce::Justification::centred); headerRow.removeFromLeft (2);
+    g.drawText ("Q",         headerRow.removeFromLeft (colW), juce::Justification::centred); headerRow.removeFromLeft (2);
     g.drawText ("gain",      headerRow, juce::Justification::centred);
 
     // Bottom bar background
@@ -320,13 +343,10 @@ void CerberusGranAudioProcessorEditor::updateLiveWaveform()
     if (ringSize == 0) return;
 
     int wp = rb.getWritePosition();
-
-    // Read the most recent ringSize samples, downsampled to kWaveformPoints
     int samplesPerPoint = juce::jmax (1, ringSize / kWaveformPoints);
 
     for (int i = 0; i < kWaveformPoints; ++i)
     {
-        // Walk backwards from write position
         int startSample = wp - ringSize + i * samplesPerPoint;
 
         float maxVal = 0.0f;

@@ -3,6 +3,7 @@
 #include "Grain.h"
 #include "WindowFunctions.h"
 #include "Parameters.h"
+#include "HeadFilter.h"
 
 class GrainHead
 {
@@ -25,6 +26,12 @@ public:
     void setReverse (bool r)          { reverse = r; }
     void setGainDb (float db)         { gainLinear = juce::Decibels::decibelsToGain (db); }
 
+    // Filter: type 0=Off, 1=LPF, 2=HPF, 3=BPF
+    void setFilterParams (int type, float cutoffHz, float q)
+    {
+        headFilter.update (type, cutoffHz, q);
+    }
+
 private:
     void spawnGrain (const class RingBuffer& ringBuffer,
                      const juce::AudioBuffer<float>* sampleBuffer,
@@ -45,4 +52,8 @@ private:
 
     GrainPool grainPool;
     juce::Random rng;
+
+    // Per-head filter and temp buffer
+    HeadFilter headFilter;
+    juce::AudioBuffer<float> headBuffer;
 };

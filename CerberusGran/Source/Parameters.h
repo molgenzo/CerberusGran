@@ -23,7 +23,7 @@ inline juce::AudioProcessorValueTreeState::ParameterLayout createParameterLayout
         "sourceMode", "Source",
         juce::StringArray { "Live", "File" }, 0));
 
-    // Per-head: core granular params only
+    // Per-head parameters
     for (int h = 0; h < kNumHeads; ++h)
     {
         auto id = [h] (const juce::String& name) -> juce::String
@@ -71,6 +71,19 @@ inline juce::AudioProcessorValueTreeState::ParameterLayout createParameterLayout
         params.push_back (std::make_unique<juce::AudioParameterFloat> (
             id ("gain"), nm ("Gain"),
             juce::NormalisableRange<float> (-24.0f, 6.0f, 0.1f), 0.0f));
+
+        // Filter
+        params.push_back (std::make_unique<juce::AudioParameterChoice> (
+            id ("filterType"), nm ("Filter Type"),
+            juce::StringArray { "Off", "LPF", "HPF", "BPF" }, 0));
+
+        params.push_back (std::make_unique<juce::AudioParameterFloat> (
+            id ("filterCutoff"), nm ("Filter Cutoff"),
+            juce::NormalisableRange<float> (20.0f, 20000.0f, 1.0f, 0.3f), 1000.0f));
+
+        params.push_back (std::make_unique<juce::AudioParameterFloat> (
+            id ("filterQ"), nm ("Filter Q"),
+            juce::NormalisableRange<float> (0.1f, 10.0f, 0.01f, 0.5f), 0.707f));
     }
 
     return { params.begin(), params.end() };

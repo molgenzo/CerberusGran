@@ -84,6 +84,9 @@ private:
         std::atomic<float>* shape = nullptr;
         std::atomic<float>* reverse = nullptr;
         std::atomic<float>* gain = nullptr;
+        std::atomic<float>* filterType = nullptr;
+        std::atomic<float>* filterCutoff = nullptr;
+        std::atomic<float>* filterQ = nullptr;
     };
 
     std::array<HeadParamPtrs, kNumHeads> headParams;
