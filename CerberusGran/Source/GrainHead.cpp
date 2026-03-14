@@ -3,9 +3,11 @@
 
 GrainHead::GrainHead() = default;
 
-void GrainHead::prepare (double sr, int /*blockSize*/)
+void GrainHead::prepare (double sr, int blockSize)
 {
     sampleRate = sr;
+    headFilter.prepare (sr, blockSize);
+    headBuffer.setSize (2, blockSize);
 }
 
 void GrainHead::spawnGrain (const RingBuffer& ringBuffer,
@@ -56,6 +58,9 @@ void GrainHead::process (juce::AudioBuffer<float>& output, int numSamples,
 {
     if (!enabled) return;
 
+    // Clear the per-head temp buffer
+    headBuffer.clear (0, numSamples);
+
     // Schedule new grains
     for (int i = 0; i < numSamples; ++i)
     {
@@ -67,7 +72,7 @@ void GrainHead::process (juce::AudioBuffer<float>& output, int numSamples,
         }
     }
 
-    // Synthesise active grains
+    // Synthesise active grains into headBuffer (not output)
     for (Grain* g = grainPool.begin(); g != grainPool.end(); ++g)
     {
         if (!g->active) continue;
@@ -90,7 +95,6 @@ void GrainHead::process (juce::AudioBuffer<float>& output, int numSamples,
             {
                 double rp = g->readPosition;
                 int ringSize = ringBuffer.getBufferSize();
-                // Wrap for negative (reverse) reads
                 while (rp < 0.0) rp += ringSize;
                 while (rp >= ringSize) rp -= ringSize;
 
@@ -102,7 +106,6 @@ void GrainHead::process (juce::AudioBuffer<float>& output, int numSamples,
                 int bufLen = sampleBuffer->getNumSamples();
                 double rp = g->readPosition;
 
-                // Clamp for file mode
                 if (rp < 0.0) rp = 0.0;
                 if (rp >= bufLen - 1) rp = bufLen - 1.001;
 
@@ -122,12 +125,20 @@ void GrainHead::process (juce::AudioBuffer<float>& output, int numSamples,
 
             float mono = (sampleL + sampleR) * 0.5f * window * g->amplitude;
 
-            output.addSample (0, i, mono);
-            if (output.getNumChannels() > 1)
-                output.addSample (1, i, mono);
+            // Write to per-head buffer instead of output
+            headBuffer.addSample (0, i, mono);
+            if (headBuffer.getNumChannels() > 1)
+                headBuffer.addSample (1, i, mono);
 
             g->readPosition += g->playbackRate;
             g->currentSample++;
         }
     }
+
+    // Apply per-head filter
+    headFilter.process (headBuffer, numSamples);
+
+    // Mix filtered result into main output
+    for (int ch = 0; ch < output.getNumChannels(); ++ch)
+        output.addFrom (ch, 0, headBuffer, juce::jmin (ch, headBuffer.getNumChannels() - 1), 0, numSamples);
 }

@@ -30,6 +30,11 @@ CerberusGranAudioProcessor::CerberusGranAudioProcessor()
         hp.shape    = apvts.getRawParameterValue (id ("shape"));
         hp.reverse  = apvts.getRawParameterValue (id ("reverse"));
         hp.gain     = apvts.getRawParameterValue (id ("gain"));
+
+        // Filter
+        hp.filterType   = apvts.getRawParameterValue (id ("filterType"));
+        hp.filterCutoff = apvts.getRawParameterValue (id ("filterCutoff"));
+        hp.filterQ      = apvts.getRawParameterValue (id ("filterQ"));
     }
 }
 
@@ -78,6 +83,12 @@ void CerberusGranAudioProcessor::updateParametersFromAPVTS()
         head.setShape (static_cast<int> (hp.shape->load()));
         head.setReverse (hp.reverse->load() >= 0.5f);
         head.setGainDb (hp.gain->load());
+
+        // Filter
+        head.setFilterParams (
+            static_cast<int> (hp.filterType->load()),
+            hp.filterCutoff->load(),
+            hp.filterQ->load());
     }
 }
 

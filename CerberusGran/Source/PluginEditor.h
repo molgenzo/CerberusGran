@@ -21,6 +21,10 @@ private:
     juce::ComboBox shapeBox;
     juce::ToggleButton reverseBtn;
 
+    // Filter controls
+    juce::ComboBox filterTypeBox;
+    juce::Slider cutoffSlider, qSlider;
+
     using SliderAttach = juce::AudioProcessorValueTreeState::SliderAttachment;
     using ButtonAttach = juce::AudioProcessorValueTreeState::ButtonAttachment;
     using ComboAttach  = juce::AudioProcessorValueTreeState::ComboBoxAttachment;
@@ -29,6 +33,10 @@ private:
     std::unique_ptr<SliderAttach> posAttach, spreadAttach, rateAttach, lengthAttach, pitchAttach, gainAttach;
     std::unique_ptr<ComboAttach>  shapeAttach;
     std::unique_ptr<ButtonAttach> reverseAttach;
+
+    // Filter attachments
+    std::unique_ptr<ComboAttach>  filterTypeAttach;
+    std::unique_ptr<SliderAttach> cutoffAttach, qAttach;
 };
 
 class CerberusGranAudioProcessorEditor : public juce::AudioProcessorEditor,
