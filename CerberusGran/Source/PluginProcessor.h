@@ -23,7 +23,7 @@ public:
     const juce::String getName() const override { return "CerberusGran"; }
     bool acceptsMidi() const override { return false; }
     bool producesMidi() const override { return false; }
-    double getTailLengthSeconds() const override { return 0.0; }
+    double getTailLengthSeconds() const override { return 2.0; }
 
     int getNumPrograms() override { return 1; }
     int getCurrentProgram() override { return 0; }
@@ -84,6 +84,22 @@ private:
         std::atomic<float>* shape = nullptr;
         std::atomic<float>* reverse = nullptr;
         std::atomic<float>* gain = nullptr;
+        // FX chain
+        std::atomic<float>* filterOn = nullptr;
+        std::atomic<float>* filterType = nullptr;
+        std::atomic<float>* filterCutoff = nullptr;
+        std::atomic<float>* filterRes = nullptr;
+        std::atomic<float>* crushOn = nullptr;
+        std::atomic<float>* crushBits = nullptr;
+        std::atomic<float>* crushRate = nullptr;
+        std::atomic<float>* delayOn = nullptr;
+        std::atomic<float>* delayTime = nullptr;
+        std::atomic<float>* delayFeedback = nullptr;
+        std::atomic<float>* delayMix = nullptr;
+        std::atomic<float>* reverbOn = nullptr;
+        std::atomic<float>* reverbSize = nullptr;
+        std::atomic<float>* reverbDamp = nullptr;
+        std::atomic<float>* reverbMix = nullptr;
     };
 
     std::array<HeadParamPtrs, kNumHeads> headParams;

@@ -60,9 +60,9 @@ inline juce::AudioProcessorValueTreeState::ParameterLayout createParameterLayout
             id ("pitch"), nm ("Pitch"),
             juce::NormalisableRange<float> (-24.0f, 24.0f, 0.01f), 0.0f));
 
-        params.push_back (std::make_unique<juce::AudioParameterChoice> (
-            id ("shape"), nm ("Shape"),
-            juce::StringArray { "Hann", "Gaussian", "Tukey", "Triangle" }, 0));
+        params.push_back (std::make_unique<juce::AudioParameterFloat> (
+            id ("shape"), nm ("Grain Shape"),
+            juce::NormalisableRange<float> (0.0f, 1.0f, 0.001f), 0.0f));
 
         params.push_back (std::make_unique<juce::AudioParameterBool> (
             id ("reverse"), nm ("Reverse"), false));
@@ -71,6 +71,66 @@ inline juce::AudioProcessorValueTreeState::ParameterLayout createParameterLayout
         params.push_back (std::make_unique<juce::AudioParameterFloat> (
             id ("gain"), nm ("Gain"),
             juce::NormalisableRange<float> (-24.0f, 6.0f, 0.1f), 0.0f));
+
+        // FX Chain: Filter
+        params.push_back (std::make_unique<juce::AudioParameterBool> (
+            id ("filterOn"), nm ("Filter On"), false));
+
+        params.push_back (std::make_unique<juce::AudioParameterChoice> (
+            id ("filterType"), nm ("Filter Type"),
+            juce::StringArray { "LP", "HP", "BP" }, 0));
+
+        params.push_back (std::make_unique<juce::AudioParameterFloat> (
+            id ("filterCutoff"), nm ("Filter Cutoff"),
+            juce::NormalisableRange<float> (20.0f, 20000.0f, 1.0f, 0.25f), 1000.0f));
+
+        params.push_back (std::make_unique<juce::AudioParameterFloat> (
+            id ("filterRes"), nm ("Filter Res"),
+            juce::NormalisableRange<float> (0.1f, 10.0f, 0.01f, 0.5f), 0.707f));
+
+        // FX Chain: Bitcrusher
+        params.push_back (std::make_unique<juce::AudioParameterBool> (
+            id ("crushOn"), nm ("Crush On"), false));
+
+        params.push_back (std::make_unique<juce::AudioParameterFloat> (
+            id ("crushBits"), nm ("Crush Bits"),
+            juce::NormalisableRange<float> (1.0f, 16.0f, 1.0f), 16.0f));
+
+        params.push_back (std::make_unique<juce::AudioParameterFloat> (
+            id ("crushRate"), nm ("Crush Rate"),
+            juce::NormalisableRange<float> (1.0f, 50.0f, 1.0f), 1.0f));
+
+        // FX Chain: Delay
+        params.push_back (std::make_unique<juce::AudioParameterBool> (
+            id ("delayOn"), nm ("Delay On"), false));
+
+        params.push_back (std::make_unique<juce::AudioParameterFloat> (
+            id ("delayTime"), nm ("Delay Time"),
+            juce::NormalisableRange<float> (1.0f, 2000.0f, 1.0f, 0.4f), 250.0f));
+
+        params.push_back (std::make_unique<juce::AudioParameterFloat> (
+            id ("delayFeedback"), nm ("Delay Fdbk"),
+            juce::NormalisableRange<float> (0.0f, 0.95f, 0.01f), 0.3f));
+
+        params.push_back (std::make_unique<juce::AudioParameterFloat> (
+            id ("delayMix"), nm ("Delay Mix"),
+            juce::NormalisableRange<float> (0.0f, 1.0f, 0.01f), 0.5f));
+
+        // FX Chain: Reverb
+        params.push_back (std::make_unique<juce::AudioParameterBool> (
+            id ("reverbOn"), nm ("Reverb On"), false));
+
+        params.push_back (std::make_unique<juce::AudioParameterFloat> (
+            id ("reverbSize"), nm ("Reverb Size"),
+            juce::NormalisableRange<float> (0.0f, 1.0f, 0.01f), 0.5f));
+
+        params.push_back (std::make_unique<juce::AudioParameterFloat> (
+            id ("reverbDamp"), nm ("Reverb Damp"),
+            juce::NormalisableRange<float> (0.0f, 1.0f, 0.01f), 0.5f));
+
+        params.push_back (std::make_unique<juce::AudioParameterFloat> (
+            id ("reverbMix"), nm ("Reverb Mix"),
+            juce::NormalisableRange<float> (0.0f, 1.0f, 0.01f), 0.3f));
     }
 
     return { params.begin(), params.end() };

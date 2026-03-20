@@ -30,6 +30,22 @@ CerberusGranAudioProcessor::CerberusGranAudioProcessor()
         hp.shape    = apvts.getRawParameterValue (id ("shape"));
         hp.reverse  = apvts.getRawParameterValue (id ("reverse"));
         hp.gain     = apvts.getRawParameterValue (id ("gain"));
+        // FX chain
+        hp.filterOn      = apvts.getRawParameterValue (id ("filterOn"));
+        hp.filterType    = apvts.getRawParameterValue (id ("filterType"));
+        hp.filterCutoff  = apvts.getRawParameterValue (id ("filterCutoff"));
+        hp.filterRes     = apvts.getRawParameterValue (id ("filterRes"));
+        hp.crushOn       = apvts.getRawParameterValue (id ("crushOn"));
+        hp.crushBits     = apvts.getRawParameterValue (id ("crushBits"));
+        hp.crushRate     = apvts.getRawParameterValue (id ("crushRate"));
+        hp.delayOn       = apvts.getRawParameterValue (id ("delayOn"));
+        hp.delayTime     = apvts.getRawParameterValue (id ("delayTime"));
+        hp.delayFeedback = apvts.getRawParameterValue (id ("delayFeedback"));
+        hp.delayMix      = apvts.getRawParameterValue (id ("delayMix"));
+        hp.reverbOn      = apvts.getRawParameterValue (id ("reverbOn"));
+        hp.reverbSize    = apvts.getRawParameterValue (id ("reverbSize"));
+        hp.reverbDamp    = apvts.getRawParameterValue (id ("reverbDamp"));
+        hp.reverbMix     = apvts.getRawParameterValue (id ("reverbMix"));
     }
 }
 
@@ -75,9 +91,29 @@ void CerberusGranAudioProcessor::updateParametersFromAPVTS()
         head.setRate (hp.rate->load());
         head.setLength (hp.length->load());
         head.setPitchSemitones (hp.pitch->load());
-        head.setShape (static_cast<int> (hp.shape->load()));
+        head.setShape (hp.shape->load());
         head.setReverse (hp.reverse->load() >= 0.5f);
         head.setGainDb (hp.gain->load());
+
+        // FX chain
+        head.setFilterEnabled (hp.filterOn->load() >= 0.5f);
+        head.setFilterType (static_cast<int> (hp.filterType->load()));
+        head.setFilterCutoff (hp.filterCutoff->load());
+        head.setFilterResonance (hp.filterRes->load());
+
+        head.setCrushEnabled (hp.crushOn->load() >= 0.5f);
+        head.setCrushBits (hp.crushBits->load());
+        head.setCrushRate (hp.crushRate->load());
+
+        head.setDelayEnabled (hp.delayOn->load() >= 0.5f);
+        head.setDelayTime (hp.delayTime->load());
+        head.setDelayFeedback (hp.delayFeedback->load());
+        head.setDelayMix (hp.delayMix->load());
+
+        head.setReverbEnabled (hp.reverbOn->load() >= 0.5f);
+        head.setReverbSize (hp.reverbSize->load());
+        head.setReverbDamp (hp.reverbDamp->load());
+        head.setReverbMix (hp.reverbMix->load());
     }
 }
 

@@ -3,9 +3,11 @@
 
 GrainHead::GrainHead() = default;
 
-void GrainHead::prepare (double sr, int /*blockSize*/)
+void GrainHead::prepare (double sr, int blockSize)
 {
     sampleRate = sr;
+    headBuffer.setSize (2, blockSize);
+    fxChain.prepare (sr, blockSize);
 }
 
 void GrainHead::spawnGrain (const RingBuffer& ringBuffer,
@@ -15,7 +17,6 @@ void GrainHead::spawnGrain (const RingBuffer& ringBuffer,
     Grain* g = grainPool.acquire();
     if (g == nullptr) return;
 
-    // Position: 0-100% with spread randomisation
     float scatterAmt = spread * (rng.nextFloat() * 2.0f - 1.0f);
     float pos = juce::jlimit (0.0f, 100.0f, position + scatterAmt) / 100.0f;
 
@@ -37,14 +38,13 @@ void GrainHead::spawnGrain (const RingBuffer& ringBuffer,
         return;
     }
 
-    // Pitch: semitones to playback rate
     double rate = std::pow (2.0, static_cast<double> (pitchSt) / 12.0);
     g->playbackRate = reverse ? -rate : rate;
 
     g->durationSamples = static_cast<int> (lengthMs * 0.001 * sampleRate);
     g->currentSample = 0;
     g->amplitude = gainLinear;
-    g->windowType = shape;
+    g->windowShape = shape;
     g->panLeft = 0.707f;
     g->panRight = 0.707f;
 }
@@ -55,6 +55,9 @@ void GrainHead::process (juce::AudioBuffer<float>& output, int numSamples,
                          bool liveMode)
 {
     if (!enabled) return;
+
+    // Clear per-head intermediate buffer
+    headBuffer.clear (0, numSamples);
 
     // Schedule new grains
     for (int i = 0; i < numSamples; ++i)
@@ -67,7 +70,7 @@ void GrainHead::process (juce::AudioBuffer<float>& output, int numSamples,
         }
     }
 
-    // Synthesise active grains
+    // Synthesise active grains into headBuffer
     for (Grain* g = grainPool.begin(); g != grainPool.end(); ++g)
     {
         if (!g->active) continue;
@@ -82,7 +85,7 @@ void GrainHead::process (juce::AudioBuffer<float>& output, int numSamples,
 
             float phase = static_cast<float> (g->currentSample)
                         / static_cast<float> (g->durationSamples);
-            float window = WindowFunctions::getValue (g->windowType, phase);
+            float window = WindowFunctions::getValue (g->windowShape, phase);
 
             float sampleL = 0.0f, sampleR = 0.0f;
 
@@ -90,7 +93,6 @@ void GrainHead::process (juce::AudioBuffer<float>& output, int numSamples,
             {
                 double rp = g->readPosition;
                 int ringSize = ringBuffer.getBufferSize();
-                // Wrap for negative (reverse) reads
                 while (rp < 0.0) rp += ringSize;
                 while (rp >= ringSize) rp -= ringSize;
 
@@ -102,7 +104,6 @@ void GrainHead::process (juce::AudioBuffer<float>& output, int numSamples,
                 int bufLen = sampleBuffer->getNumSamples();
                 double rp = g->readPosition;
 
-                // Clamp for file mode
                 if (rp < 0.0) rp = 0.0;
                 if (rp >= bufLen - 1) rp = bufLen - 1.001;
 
@@ -122,12 +123,20 @@ void GrainHead::process (juce::AudioBuffer<float>& output, int numSamples,
 
             float mono = (sampleL + sampleR) * 0.5f * window * g->amplitude;
 
-            output.addSample (0, i, mono);
-            if (output.getNumChannels() > 1)
-                output.addSample (1, i, mono);
+            // Write to per-head buffer (not shared output)
+            headBuffer.addSample (0, i, mono);
+            if (headBuffer.getNumChannels() > 1)
+                headBuffer.addSample (1, i, mono);
 
             g->readPosition += g->playbackRate;
             g->currentSample++;
         }
     }
+
+    // Apply FX chain to per-head buffer
+    fxChain.process (headBuffer, numSamples);
+
+    // Mix processed head buffer into shared output
+    for (int ch = 0; ch < juce::jmin (output.getNumChannels(), headBuffer.getNumChannels()); ++ch)
+        output.addFrom (ch, 0, headBuffer, ch, 0, numSamples);
 }
