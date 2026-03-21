@@ -10,7 +10,7 @@ inline juce::AudioProcessorValueTreeState::ParameterLayout createParameterLayout
     // Global
     params.push_back (std::make_unique<juce::AudioParameterFloat> (
         "masterGain", "Gain",
-        juce::NormalisableRange<float> (0.0f, 2.0f, 0.01f), 1.0f));
+        juce::NormalisableRange<float> (-60.0f, 3.0f, 0.1f), 0.0f));
 
     params.push_back (std::make_unique<juce::AudioParameterFloat> (
         "mix", "Mix",

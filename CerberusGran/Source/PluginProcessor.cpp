@@ -74,7 +74,8 @@ void CerberusGranAudioProcessor::prepareToPlay (double sampleRate, int samplesPe
 
 void CerberusGranAudioProcessor::updateParametersFromAPVTS()
 {
-    grainEngine.setMasterGain (masterGainParam->load());
+    float gainDb = masterGainParam->load();
+    grainEngine.setMasterGain (gainDb <= -59.9f ? 0.0f : juce::Decibels::decibelsToGain (gainDb));
 
     int sm = static_cast<int> (sourceModeParam->load());
     sourceMode.store (sm, std::memory_order_relaxed);

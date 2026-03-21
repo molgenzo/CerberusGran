@@ -46,11 +46,11 @@ void CerberusGranAudioProcessorEditor::resized()
 {
     auto area = getLocalBounds();
 
-    // Waveform at top
-    waveformDisplay.setBounds (area.removeFromTop (130).reduced (8, 8));
+    // Global bar at top
+    globalBar.setBounds (area.removeFromTop (40));
 
-    // Global bar at bottom
-    globalBar.setBounds (area.removeFromBottom (40));
+    // Waveform below global bar
+    waveformDisplay.setBounds (area.removeFromTop (130).reduced (8, 4));
 
     // 5 engine columns fill the middle
     auto columnsArea = area.reduced (4, 4);

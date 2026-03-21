@@ -113,15 +113,13 @@ public:
             ? juce::Colour (0xff888888)
             : juce::Colour (static_cast<juce::uint32> ((juce::int64) accentVar));
 
-        // Track
-        float trackH = 3.0f;
-        float trackY = bounds.getCentreY() - trackH * 0.5f;
+        // Track background — full height of the slider box
         g.setColour (juce::Colour (0xff3A3A40));
-        g.fillRoundedRectangle (bounds.getX(), trackY, bounds.getWidth(), trackH, 1.5f);
+        g.fillRoundedRectangle (bounds, 3.0f);
 
-        // Filled portion
+        // Filled portion — full height
         float fillW = sliderPos - bounds.getX();
-        g.setColour (accent);
-        g.fillRoundedRectangle (bounds.getX(), trackY, fillW, trackH, 1.5f);
+        g.setColour (accent.withAlpha (0.6f));
+        g.fillRoundedRectangle (bounds.getX(), bounds.getY(), fillW, bounds.getHeight(), 3.0f);
     }
 };

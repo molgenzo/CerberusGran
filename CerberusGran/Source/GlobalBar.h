@@ -12,6 +12,11 @@ public:
         addAndMakeVisible (nameLabel);
 
         freezeBtn.setButtonText ("Freeze");
+        freezeBtn.setClickingTogglesState (true);
+        freezeBtn.setColour (juce::TextButton::buttonColourId, juce::Colour (0xff2A2A30));
+        freezeBtn.setColour (juce::TextButton::buttonOnColourId, juce::Colour (0xff8B5CF6));
+        freezeBtn.setColour (juce::TextButton::textColourOffId, juce::Colour (0xffaaaaaa));
+        freezeBtn.setColour (juce::TextButton::textColourOnId, juce::Colour (0xff1A1A1E));
         addAndMakeVisible (freezeBtn);
         freezeAttach = std::make_unique<ButtonAttach> (apvts, "freeze", freezeBtn);
 
@@ -21,13 +26,15 @@ public:
 
         gainSlider.setSliderStyle (juce::Slider::LinearBar);
         gainSlider.setTextBoxIsEditable (true);
-        gainSlider.setTextValueSuffix ("x");
+        gainSlider.setTextValueSuffix (" dB");
+        gainSlider.setSliderSnapsToMousePosition (false);
         addAndMakeVisible (gainSlider);
         gainAttach = std::make_unique<SliderAttach> (apvts, "masterGain", gainSlider);
 
         mixSlider.setSliderStyle (juce::Slider::LinearBar);
-        mixSlider.setTextBoxIsEditable (true);
+        mixSlider.setTextBoxIsEditable (false);
         mixSlider.setTextValueSuffix ("%");
+        mixSlider.setSliderSnapsToMousePosition (true);
         addAndMakeVisible (mixSlider);
         mixAttach = std::make_unique<SliderAttach> (apvts, "mix", mixSlider);
     }
@@ -37,7 +44,8 @@ public:
         g.setColour (juce::Colour (0xff151518));
         g.fillRect (getLocalBounds());
         g.setColour (juce::Colour (0xff3A3A40));
-        g.drawLine (0.0f, 0.0f, static_cast<float> (getWidth()), 0.0f, 0.5f);
+        float bottom = static_cast<float> (getHeight());
+        g.drawLine (0.0f, bottom, static_cast<float> (getWidth()), bottom, 0.5f);
     }
 
     void resized() override
@@ -51,15 +59,15 @@ public:
         area.removeFromLeft (8);
         sourceModeBox.setBounds (area.removeFromLeft (65).withHeight (22).withY (area.getY() + 2));
 
-        auto right = area.removeFromRight (200);
-        mixSlider.setBounds (right.removeFromRight (80).withHeight (22).withY (right.getY() + 2));
-        right.removeFromRight (8);
-        gainSlider.setBounds (right.removeFromRight (80).withHeight (22).withY (right.getY() + 2));
+        auto right = area.removeFromRight (220);
+        mixSlider.setBounds (right.removeFromRight (90).withHeight (22).withY (right.getY() + 2));
+        right.removeFromRight (10);
+        gainSlider.setBounds (right.removeFromRight (90).withHeight (22).withY (right.getY() + 2));
     }
 
 private:
     juce::Label nameLabel;
-    juce::ToggleButton freezeBtn;
+    juce::TextButton freezeBtn;
     juce::ComboBox sourceModeBox;
     juce::Slider gainSlider, mixSlider;
 
