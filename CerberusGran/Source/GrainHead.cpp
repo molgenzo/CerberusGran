@@ -133,6 +133,55 @@ void GrainHead::process (juce::AudioBuffer<float>& output, int numSamples,
         }
     }
 
+    // Update grain snapshots for UI visualization
+    {
+        int bufSize = liveMode ? ringBuffer.getBufferSize()
+                               : (sampleBuffer ? sampleBuffer->getNumSamples() : 1);
+        int wp = liveMode ? ringBuffer.getWritePosition() : 0;
+        int count = 0;
+
+        for (Grain* g = grainPool.begin(); g != grainPool.end() && count < kMaxSnapshotGrains; ++g)
+        {
+            if (!g->active) continue;
+
+            auto& snap = grainSnapshots[count];
+            double rp = g->readPosition;
+
+            if (liveMode)
+            {
+                // Normalize relative to the write head so grains stay
+                // visually near their head position on the scrolling waveform.
+                // The waveform displays oldest (left) to newest/write head (right).
+                int ringSize = ringBuffer.getBufferSize();
+                while (rp < 0.0) rp += ringSize;
+                while (rp >= ringSize) rp -= ringSize;
+
+                // How far behind the write head is this grain?
+                double lookback = static_cast<double> (wp) - rp;
+                if (lookback < 0.0) lookback += ringSize;
+
+                // Match the head position parameter convention:
+                // position 0% = write head, position 100% = oldest
+                // Head marker draws at pos/100 from left, so grain should too
+                snap.normPosition = static_cast<float> (lookback / static_cast<double> (ringSize));
+            }
+            else
+            {
+                snap.normPosition = static_cast<float> (rp / static_cast<double> (bufSize));
+            }
+
+            snap.normLength = static_cast<float> (g->durationSamples) / static_cast<float> (bufSize);
+            snap.progress = static_cast<float> (g->currentSample) / static_cast<float> (juce::jmax (1, g->durationSamples));
+            snap.active = true;
+            count++;
+        }
+
+        for (int i = count; i < kMaxSnapshotGrains; ++i)
+            grainSnapshots[i].active = false;
+
+        activeGrainCount.store (count, std::memory_order_relaxed);
+    }
+
     // Apply FX chain to per-head buffer
     fxChain.process (headBuffer, numSamples);
 

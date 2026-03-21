@@ -126,6 +126,31 @@ public:
             tri.addTriangle (x - 4.0f, ty + 8.0f, x + 4.0f, ty + 8.0f, static_cast<float> (x), ty);
             g.setColour (headColours[i]);
             g.fillPath (tri);
+
+            // Draw active grain playheads for this head
+            auto& head = processor.getGrainEngine().getHead (i);
+            int grainCount = head.getActiveGrainCount();
+            auto& snapshots = head.getGrainSnapshots();
+
+            for (int gi = 0; gi < grainCount; ++gi)
+            {
+                auto& snap = snapshots[gi];
+                if (!snap.active) continue;
+
+                float gx = inner.getX() + snap.normPosition * inner.getWidth();
+                float gw = snap.normLength * inner.getWidth();
+                if (gw < 2.0f) gw = 2.0f;
+
+                // Grain bar: colored rectangle centered vertically in waveform
+                float barH = 4.0f;
+                float centreY = static_cast<float> (inner.getCentreY());
+                float barY = centreY - 12.0f + (gi % 6) * 5.0f; // stagger around centre
+
+                // Fade alpha based on progress (bright at start, fades out)
+                float alpha = 0.7f * (1.0f - snap.progress * 0.5f);
+                g.setColour (headColours[i].withAlpha (alpha));
+                g.fillRoundedRectangle (gx, barY, gw, barH, 1.5f);
+            }
         }
     }
 

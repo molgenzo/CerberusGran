@@ -47,6 +47,22 @@ public:
     void setReverbDamp (float d)      { fxChain.setReverbDamp (d); }
     void setReverbMix (float m)       { fxChain.setReverbMix (m); }
 
+    // Grain visualization snapshot (read by UI thread)
+    struct GrainSnapshot
+    {
+        float normPosition = 0.0f;  // 0–1 position in buffer
+        float normLength = 0.0f;    // 0–1 length relative to buffer
+        float progress = 0.0f;      // 0–1 how far through the grain
+        bool active = false;
+    };
+
+    static constexpr int kMaxSnapshotGrains = 32;
+    std::array<GrainSnapshot, kMaxSnapshotGrains> grainSnapshots {};
+    std::atomic<int> activeGrainCount { 0 };
+
+    const std::array<GrainSnapshot, kMaxSnapshotGrains>& getGrainSnapshots() const { return grainSnapshots; }
+    int getActiveGrainCount() const { return activeGrainCount.load (std::memory_order_relaxed); }
+
 private:
     void spawnGrain (const class RingBuffer& ringBuffer,
                      const juce::AudioBuffer<float>* sampleBuffer,
