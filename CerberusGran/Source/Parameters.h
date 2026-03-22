@@ -64,8 +64,9 @@ inline juce::AudioProcessorValueTreeState::ParameterLayout createParameterLayout
             id ("shape"), nm ("Grain Shape"),
             juce::NormalisableRange<float> (0.0f, 1.0f, 0.001f), 0.0f));
 
-        params.push_back (std::make_unique<juce::AudioParameterBool> (
-            id ("reverse"), nm ("Reverse"), false));
+        params.push_back (std::make_unique<juce::AudioParameterFloat> (
+            id ("reverse"), nm ("Reverse"),
+            juce::NormalisableRange<float> (0.0f, 100.0f, 0.1f), 0.0f));
 
         // Output
         params.push_back (std::make_unique<juce::AudioParameterFloat> (

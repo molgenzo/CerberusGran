@@ -93,7 +93,7 @@ void CerberusGranAudioProcessor::updateParametersFromAPVTS()
         head.setLength (hp.length->load());
         head.setPitchSemitones (hp.pitch->load());
         head.setShape (hp.shape->load());
-        head.setReverse (hp.reverse->load() >= 0.5f);
+        head.setReversePct (hp.reverse->load());
         head.setGainDb (hp.gain->load());
 
         // FX chain

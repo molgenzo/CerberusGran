@@ -30,12 +30,13 @@ public:
             return k;
         };
 
-        posKnob    = makeKnob ("Pos",    "%",  "position");
-        spreadKnob = makeKnob ("Spread", "",   "spread");
-        rateKnob   = makeKnob ("Rate",   "ms", "rate");
-        lenKnob    = makeKnob ("Len",    "ms", "length");
-        pitchKnob  = makeKnob ("Pitch",  "st", "pitch");
-        gainKnob   = makeKnob ("Gain",   "dB", "gain");
+        posKnob     = makeKnob ("Pos",     "%",  "position");
+        spreadKnob  = makeKnob ("Spread",  "",   "spread");
+        rateKnob    = makeKnob ("Rate",    "ms", "rate");
+        lenKnob     = makeKnob ("Len",     "ms", "length");
+        pitchKnob   = makeKnob ("Pitch",   "st", "pitch");
+        gainKnob    = makeKnob ("Gain",    "dB", "gain");
+        reverseKnob = makeKnob ("Reverse", "%",  "reverse");
 
         // Grain shape knob (continuous morph)
         shapeKnob.setAccentColour (accent);
@@ -86,7 +87,7 @@ public:
 
         area.removeFromTop (22); // "GRAIN" label space
 
-        // Knob grid: 2 columns x 3 rows
+        // Knob grid: 2 columns x 4 rows
         int knobH = 80;
         int halfW = area.getWidth() / 2;
 
@@ -101,6 +102,9 @@ public:
         auto row3 = area.removeFromTop (knobH);
         pitchKnob->setBounds (row3.removeFromLeft (halfW));
         gainKnob->setBounds (row3);
+
+        auto row4 = area.removeFromTop (knobH);
+        reverseKnob->setBounds (row4.removeFromLeft (halfW));
 
         // Spacing before grain shape
         area.removeFromTop (8);
@@ -128,6 +132,7 @@ private:
     RotaryKnob* lenKnob = nullptr;
     RotaryKnob* pitchKnob = nullptr;
     RotaryKnob* gainKnob = nullptr;
+    RotaryKnob* reverseKnob = nullptr;
 
     GrainShapeKnob shapeKnob;
     FXChainPanel fxPanel;

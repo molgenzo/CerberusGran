@@ -24,7 +24,7 @@ public:
     void setLength (float ms)         { lengthMs = ms; }
     void setPitchSemitones (float st) { pitchSt = st; }
     void setShape (float s)           { shape = s; }
-    void setReverse (bool r)          { reverse = r; }
+    void setReversePct (float pct)     { reversePct = pct; }
     void setGainDb (float db)         { gainLinear = juce::Decibels::decibelsToGain (db); }
 
     // FX chain setters (forwarded to fxChain)
@@ -75,7 +75,7 @@ private:
     float lengthMs = 200.0f;
     float pitchSt = 0.0f;
     float shape = 0.0f;
-    bool reverse = false;
+    float reversePct = 0.0f;  // 0-100%
     float gainLinear = 1.0f;
 
     double sampleRate = 44100.0;

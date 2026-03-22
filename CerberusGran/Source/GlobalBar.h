@@ -5,6 +5,7 @@ class GlobalBar : public juce::Component
 {
 public:
     GlobalBar (juce::AudioProcessorValueTreeState& apvts)
+        : apvtsRef (apvts)
     {
         nameLabel.setText ("CerberusGran", juce::dontSendNotification);
         nameLabel.setFont (juce::FontOptions (14.0f, juce::Font::bold));
@@ -20,9 +21,28 @@ public:
         addAndMakeVisible (freezeBtn);
         freezeAttach = std::make_unique<ButtonAttach> (apvts, "freeze", freezeBtn);
 
+        modeLabel.setText ("Mode", juce::dontSendNotification);
+        modeLabel.setFont (juce::FontOptions (13.0f, juce::Font::bold));
+        modeLabel.setColour (juce::Label::textColourId, juce::Colour (0xff888888));
+        modeLabel.setJustificationType (juce::Justification::centredRight);
+        addAndMakeVisible (modeLabel);
+
         sourceModeBox.addItemList ({ "Live", "File" }, 1);
+        sourceModeBox.onChange = [this] { onModeChanged(); };
         addAndMakeVisible (sourceModeBox);
         sourceModeAttach = std::make_unique<ComboAttach> (apvts, "sourceMode", sourceModeBox);
+
+        gainLabel.setText ("Gain", juce::dontSendNotification);
+        gainLabel.setFont (juce::FontOptions (13.0f, juce::Font::bold));
+        gainLabel.setColour (juce::Label::textColourId, juce::Colour (0xff888888));
+        gainLabel.setJustificationType (juce::Justification::centredRight);
+        addAndMakeVisible (gainLabel);
+
+        mixLabel.setText ("Dry/Wet", juce::dontSendNotification);
+        mixLabel.setFont (juce::FontOptions (13.0f, juce::Font::bold));
+        mixLabel.setColour (juce::Label::textColourId, juce::Colour (0xff888888));
+        mixLabel.setJustificationType (juce::Justification::centredRight);
+        addAndMakeVisible (mixLabel);
 
         gainSlider.setSliderStyle (juce::Slider::LinearBar);
         gainSlider.setTextBoxIsEditable (true);
@@ -56,17 +76,24 @@ public:
         area.removeFromLeft (20);
 
         freezeBtn.setBounds (area.removeFromLeft (60).withHeight (22).withY (area.getY() + 2));
-        area.removeFromLeft (8);
+        area.removeFromLeft (12);
+        modeLabel.setBounds (area.removeFromLeft (40).withHeight (22).withY (area.getY() + 2));
+        area.removeFromLeft (4);
         sourceModeBox.setBounds (area.removeFromLeft (65).withHeight (22).withY (area.getY() + 2));
 
-        auto right = area.removeFromRight (220);
+        auto right = area.removeFromRight (310);
         mixSlider.setBounds (right.removeFromRight (90).withHeight (22).withY (right.getY() + 2));
+        mixLabel.setBounds (right.removeFromRight (55).withHeight (22).withY (right.getY() + 2));
         right.removeFromRight (10);
         gainSlider.setBounds (right.removeFromRight (90).withHeight (22).withY (right.getY() + 2));
+        gainLabel.setBounds (right.removeFromRight (36).withHeight (22).withY (right.getY() + 2));
     }
 
 private:
+    juce::AudioProcessorValueTreeState& apvtsRef;
+
     juce::Label nameLabel;
+    juce::Label gainLabel, mixLabel, modeLabel;
     juce::TextButton freezeBtn;
     juce::ComboBox sourceModeBox;
     juce::Slider gainSlider, mixSlider;
@@ -78,4 +105,23 @@ private:
     std::unique_ptr<SliderAttach> gainAttach, mixAttach;
     std::unique_ptr<ButtonAttach> freezeAttach;
     std::unique_ptr<ComboAttach> sourceModeAttach;
+
+    void onModeChanged()
+    {
+        bool isFile = (sourceModeBox.getSelectedId() == 2);
+
+        if (isFile)
+        {
+            // Lock dry/wet to 100% in file mode
+            if (auto* p = apvtsRef.getParameter ("mix"))
+                p->setValueNotifyingHost (1.0f);
+            mixSlider.setEnabled (false);
+            mixSlider.setAlpha (0.4f);
+        }
+        else
+        {
+            mixSlider.setEnabled (true);
+            mixSlider.setAlpha (1.0f);
+        }
+    }
 };

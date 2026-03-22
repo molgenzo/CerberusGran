@@ -39,12 +39,14 @@ void GrainHead::spawnGrain (const RingBuffer& ringBuffer,
     }
 
     double rate = std::pow (2.0, static_cast<double> (pitchSt) / 12.0);
-    g->playbackRate = reverse ? -rate : rate;
+    bool thisGrainReverse = (rng.nextFloat() * 100.0f) < reversePct;
+    g->playbackRate = thisGrainReverse ? -rate : rate;
 
     g->durationSamples = static_cast<int> (lengthMs * 0.001 * sampleRate);
     g->currentSample = 0;
     g->amplitude = gainLinear;
     g->windowShape = shape;
+    g->spawnNormPos = pos; // store normalized spawn position for UI
     g->panLeft = 0.707f;
     g->panRight = 0.707f;
 }
@@ -137,7 +139,6 @@ void GrainHead::process (juce::AudioBuffer<float>& output, int numSamples,
     {
         int bufSize = liveMode ? ringBuffer.getBufferSize()
                                : (sampleBuffer ? sampleBuffer->getNumSamples() : 1);
-        int wp = liveMode ? ringBuffer.getWritePosition() : 0;
         int count = 0;
 
         for (Grain* g = grainPool.begin(); g != grainPool.end() && count < kMaxSnapshotGrains; ++g)
@@ -145,31 +146,10 @@ void GrainHead::process (juce::AudioBuffer<float>& output, int numSamples,
             if (!g->active) continue;
 
             auto& snap = grainSnapshots[count];
-            double rp = g->readPosition;
 
-            if (liveMode)
-            {
-                // Normalize relative to the write head so grains stay
-                // visually near their head position on the scrolling waveform.
-                // The waveform displays oldest (left) to newest/write head (right).
-                int ringSize = ringBuffer.getBufferSize();
-                while (rp < 0.0) rp += ringSize;
-                while (rp >= ringSize) rp -= ringSize;
-
-                // How far behind the write head is this grain?
-                double lookback = static_cast<double> (wp) - rp;
-                if (lookback < 0.0) lookback += ringSize;
-
-                // Match the head position parameter convention:
-                // position 0% = write head, position 100% = oldest
-                // Head marker draws at pos/100 from left, so grain should too
-                snap.normPosition = static_cast<float> (lookback / static_cast<double> (ringSize));
-            }
-            else
-            {
-                snap.normPosition = static_cast<float> (rp / static_cast<double> (bufSize));
-            }
-
+            // Use the stored spawn position so grains stay near the head
+            // marker regardless of playback direction (forward or reverse)
+            snap.normPosition = g->spawnNormPos;
             snap.normLength = static_cast<float> (g->durationSamples) / static_cast<float> (bufSize);
             snap.progress = static_cast<float> (g->currentSample) / static_cast<float> (juce::jmax (1, g->durationSamples));
             snap.active = true;
