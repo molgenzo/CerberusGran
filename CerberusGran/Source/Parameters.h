@@ -47,9 +47,21 @@ inline juce::AudioProcessorValueTreeState::ParameterLayout createParameterLayout
             juce::NormalisableRange<float> (0.0f, 50.0f, 0.1f), 0.0f));
 
         // Placement
+        params.push_back (std::make_unique<juce::AudioParameterChoice> (
+            id ("rateMode"), nm ("Rate Mode"),
+            juce::StringArray { "Time", "Sync" }, 0));
+
         params.push_back (std::make_unique<juce::AudioParameterFloat> (
             id ("rate"), nm ("Rate"),
             juce::NormalisableRange<float> (5.0f, 500.0f, 1.0f, 0.4f), 100.0f));
+
+        params.push_back (std::make_unique<juce::AudioParameterChoice> (
+            id ("rateSyncDiv"), nm ("Sync Div"),
+            juce::StringArray { "1/1", "1/2", "1/4", "1/8", "1/16", "1/32", "1/64", "1/128", "1/256" }, 3));
+
+        params.push_back (std::make_unique<juce::AudioParameterChoice> (
+            id ("rateSyncType"), nm ("Sync Type"),
+            juce::StringArray { "Normal", "Triplet", "Dotted" }, 0));
 
         // Lifetime
         params.push_back (std::make_unique<juce::AudioParameterFloat> (

@@ -38,6 +38,30 @@ public:
         gainKnob    = makeKnob ("Gain",    "dB", "gain");
         reverseKnob = makeKnob ("Reverse", "%",  "reverse");
 
+        // Rate mode toggle (Time / Sync)
+        rateModeBox.addItemList ({ "Time", "Sync" }, 1);
+        rateModeBox.setColour (juce::ComboBox::backgroundColourId, juce::Colour (0xff2A2A30));
+        rateModeBox.setColour (juce::ComboBox::outlineColourId, juce::Colour (0xff3A3A40));
+        rateModeBox.onChange = [this] { updateRateModeVisibility(); };
+        addAndMakeVisible (rateModeBox);
+        rateModeAttach = std::make_unique<ComboAttach> (apvts, id ("rateMode"), rateModeBox);
+
+        // Sync division selector
+        syncDivBox.addItemList ({ "1/1", "1/2", "1/4", "1/8", "1/16", "1/32", "1/64", "1/128", "1/256" }, 1);
+        syncDivBox.setColour (juce::ComboBox::backgroundColourId, juce::Colour (0xff2A2A30));
+        syncDivBox.setColour (juce::ComboBox::outlineColourId, juce::Colour (0xff3A3A40));
+        syncDivBox.setVisible (false);
+        addAndMakeVisible (syncDivBox);
+        syncDivAttach = std::make_unique<ComboAttach> (apvts, id ("rateSyncDiv"), syncDivBox);
+
+        // Sync type selector (Normal / Triplet / Dotted)
+        syncTypeBox.addItemList ({ "Norm", "Trip", "Dot" }, 1);
+        syncTypeBox.setColour (juce::ComboBox::backgroundColourId, juce::Colour (0xff2A2A30));
+        syncTypeBox.setColour (juce::ComboBox::outlineColourId, juce::Colour (0xff3A3A40));
+        syncTypeBox.setVisible (false);
+        addAndMakeVisible (syncTypeBox);
+        syncTypeAttach = std::make_unique<ComboAttach> (apvts, id ("rateSyncType"), syncTypeBox);
+
         // Grain shape knob (continuous morph)
         shapeKnob.setAccentColour (accent);
         addAndMakeVisible (shapeKnob);
@@ -54,6 +78,9 @@ public:
             [this] (float v) { setAlpha (v >= 0.5f ? 1.0f : 0.35f); repaint(); },
             nullptr);
         enableAttachmentCb->sendInitialUpdate();
+
+        // Initial visibility
+        updateRateModeVisibility();
     }
 
     void paint (juce::Graphics& g) override
@@ -96,7 +123,23 @@ public:
         spreadKnob->setBounds (row1);
 
         auto row2 = area.removeFromTop (knobH);
-        rateKnob->setBounds (row2.removeFromLeft (halfW));
+        auto rateArea = row2.removeFromLeft (halfW);
+
+        // Rate mode selector at top of rate area
+        rateModeBox.setBounds (rateArea.removeFromTop (20).reduced (2, 0));
+
+        if (rateModeBox.getSelectedId() == 2) // Sync
+        {
+            // Show division and type dropdowns
+            syncDivBox.setBounds (rateArea.removeFromTop (22).reduced (2, 1));
+            syncTypeBox.setBounds (rateArea.removeFromTop (22).reduced (2, 1));
+        }
+        else
+        {
+            // Show rate knob
+            rateKnob->setBounds (rateArea);
+        }
+
         lenKnob->setBounds (row2);
 
         auto row3 = area.removeFromTop (knobH);
@@ -138,11 +181,25 @@ private:
     FXChainPanel fxPanel;
     juce::Viewport fxViewport;
 
+    // Rate sync controls
+    juce::ComboBox rateModeBox, syncDivBox, syncTypeBox;
+
     using SliderAttach = juce::AudioProcessorValueTreeState::SliderAttachment;
     using ButtonAttach = juce::AudioProcessorValueTreeState::ButtonAttachment;
+    using ComboAttach  = juce::AudioProcessorValueTreeState::ComboBoxAttachment;
 
     std::unique_ptr<ButtonAttach> enableAttach;
     std::unique_ptr<SliderAttach> shapeAttach;
+    std::unique_ptr<ComboAttach> rateModeAttach, syncDivAttach, syncTypeAttach;
     juce::OwnedArray<SliderAttach> knobAttachments;
     std::unique_ptr<juce::ParameterAttachment> enableAttachmentCb;
+
+    void updateRateModeVisibility()
+    {
+        bool isSync = (rateModeBox.getSelectedId() == 2);
+        rateKnob->setVisible (!isSync);
+        syncDivBox.setVisible (isSync);
+        syncTypeBox.setVisible (isSync);
+        resized();
+    }
 };

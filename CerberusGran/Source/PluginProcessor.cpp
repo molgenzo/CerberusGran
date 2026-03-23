@@ -24,7 +24,10 @@ CerberusGranAudioProcessor::CerberusGranAudioProcessor()
         hp.enable   = apvts.getRawParameterValue (id ("enable"));
         hp.position = apvts.getRawParameterValue (id ("position"));
         hp.spread   = apvts.getRawParameterValue (id ("spread"));
-        hp.rate     = apvts.getRawParameterValue (id ("rate"));
+        hp.rateMode     = apvts.getRawParameterValue (id ("rateMode"));
+        hp.rate         = apvts.getRawParameterValue (id ("rate"));
+        hp.rateSyncDiv  = apvts.getRawParameterValue (id ("rateSyncDiv"));
+        hp.rateSyncType = apvts.getRawParameterValue (id ("rateSyncType"));
         hp.length   = apvts.getRawParameterValue (id ("length"));
         hp.pitch    = apvts.getRawParameterValue (id ("pitch"));
         hp.shape    = apvts.getRawParameterValue (id ("shape"));
@@ -89,7 +92,39 @@ void CerberusGranAudioProcessor::updateParametersFromAPVTS()
         head.setEnabled (hp.enable->load() >= 0.5f);
         head.setPosition (hp.position->load());
         head.setSpread (hp.spread->load());
-        head.setRate (hp.rate->load());
+        // Rate: Time mode uses raw ms, Sync mode calculates from tempo
+        {
+            int rateMode = static_cast<int> (hp.rateMode->load());
+            if (rateMode == 0) // Time
+            {
+                head.setRate (hp.rate->load());
+            }
+            else // Sync
+            {
+                double bpm = 120.0; // fallback
+                if (auto* playHead = getPlayHead())
+                {
+                    if (auto pos = playHead->getPosition())
+                    {
+                        if (auto b = pos->getBpm())
+                            bpm = *b;
+                    }
+                }
+
+                // Division: 0=1/1, 1=1/2, 2=1/4, 3=1/8, ..., 8=1/256
+                int divIdx = static_cast<int> (hp.rateSyncDiv->load());
+                double divValue = 1.0 / (1 << divIdx); // 1, 0.5, 0.25, 0.125...
+                double quarterMs = 60000.0 / bpm;
+                double noteMs = divValue * 4.0 * quarterMs; // relative to whole note
+
+                // Type: 0=Normal, 1=Triplet, 2=Dotted
+                int syncType = static_cast<int> (hp.rateSyncType->load());
+                if (syncType == 1)      noteMs *= 2.0 / 3.0;  // triplet
+                else if (syncType == 2) noteMs *= 3.0 / 2.0;  // dotted
+
+                head.setRate (static_cast<float> (juce::jmax (1.0, noteMs)));
+            }
+        }
         head.setLength (hp.length->load());
         head.setPitchSemitones (hp.pitch->load());
         head.setShape (hp.shape->load());

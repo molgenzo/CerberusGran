@@ -78,7 +78,10 @@ private:
         std::atomic<float>* enable = nullptr;
         std::atomic<float>* position = nullptr;
         std::atomic<float>* spread = nullptr;
+        std::atomic<float>* rateMode = nullptr;
         std::atomic<float>* rate = nullptr;
+        std::atomic<float>* rateSyncDiv = nullptr;
+        std::atomic<float>* rateSyncType = nullptr;
         std::atomic<float>* length = nullptr;
         std::atomic<float>* pitch = nullptr;
         std::atomic<float>* shape = nullptr;
