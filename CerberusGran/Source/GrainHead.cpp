@@ -44,7 +44,12 @@ void GrainHead::spawnGrain (const RingBuffer& ringBuffer,
 
     g->durationSamples = static_cast<int> (lengthMs * 0.001 * sampleRate);
     g->currentSample = 0;
-    g->amplitude = gainLinear;
+
+    // Overlap compensation: scale amplitude by 1/sqrt(overlapCount)
+    // to prevent volume buildup when grain length > grain rate
+    float overlapCount = (rateMs > 0.0f) ? (lengthMs / rateMs) : 1.0f;
+    if (overlapCount < 1.0f) overlapCount = 1.0f;
+    g->amplitude = gainLinear / std::sqrt (overlapCount);
     g->windowShape = shape;
     g->spawnNormPos = pos; // store normalized spawn position for UI
     g->panLeft = 0.707f;

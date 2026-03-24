@@ -28,7 +28,9 @@ CerberusGranAudioProcessor::CerberusGranAudioProcessor()
         hp.rate         = apvts.getRawParameterValue (id ("rate"));
         hp.rateSyncDiv  = apvts.getRawParameterValue (id ("rateSyncDiv"));
         hp.rateSyncType = apvts.getRawParameterValue (id ("rateSyncType"));
-        hp.length   = apvts.getRawParameterValue (id ("length"));
+        hp.sizeLink  = apvts.getRawParameterValue (id ("sizeLink"));
+        hp.length    = apvts.getRawParameterValue (id ("length"));
+        hp.sizeRatio = apvts.getRawParameterValue (id ("sizeRatio"));
         hp.pitch    = apvts.getRawParameterValue (id ("pitch"));
         hp.shape    = apvts.getRawParameterValue (id ("shape"));
         hp.reverse  = apvts.getRawParameterValue (id ("reverse"));
@@ -93,11 +95,13 @@ void CerberusGranAudioProcessor::updateParametersFromAPVTS()
         head.setPosition (hp.position->load());
         head.setSpread (hp.spread->load());
         // Rate: Time mode uses raw ms, Sync mode calculates from tempo
+        float effectiveRateMs = hp.rate->load();
         {
             int rateMode = static_cast<int> (hp.rateMode->load());
             if (rateMode == 0) // Time
             {
-                head.setRate (hp.rate->load());
+                effectiveRateMs = hp.rate->load();
+                head.setRate (effectiveRateMs);
             }
             else // Sync
             {
@@ -122,10 +126,25 @@ void CerberusGranAudioProcessor::updateParametersFromAPVTS()
                 if (syncType == 1)      noteMs *= 2.0 / 3.0;  // triplet
                 else if (syncType == 2) noteMs *= 3.0 / 2.0;  // dotted
 
-                head.setRate (static_cast<float> (juce::jmax (1.0, noteMs)));
+                effectiveRateMs = static_cast<float> (juce::jmax (1.0, noteMs));
+                head.setRate (effectiveRateMs);
             }
         }
-        head.setLength (hp.length->load());
+
+        // Length: free or linked to rate as a ratio
+        bool linked = hp.sizeLink->load() >= 0.5f;
+        if (linked)
+        {
+            // Ratios: 0=1:4, 1=1:2, 2=1:1, 3=2:1, 4=4:1, 5=8:1, 6=16:1
+            static const float ratios[] = { 0.25f, 0.5f, 1.0f, 2.0f, 4.0f, 8.0f, 16.0f };
+            int ratioIdx = juce::jlimit (0, 6, static_cast<int> (hp.sizeRatio->load()));
+            float linkedLength = effectiveRateMs * ratios[ratioIdx];
+            head.setLength (juce::jmax (1.0f, linkedLength));
+        }
+        else
+        {
+            head.setLength (hp.length->load());
+        }
         head.setPitchSemitones (hp.pitch->load());
         head.setShape (hp.shape->load());
         head.setReversePct (hp.reverse->load());

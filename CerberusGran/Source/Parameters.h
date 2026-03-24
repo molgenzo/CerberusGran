@@ -64,9 +64,16 @@ inline juce::AudioProcessorValueTreeState::ParameterLayout createParameterLayout
             juce::StringArray { "Normal", "Triplet", "Dotted" }, 0));
 
         // Lifetime
+        params.push_back (std::make_unique<juce::AudioParameterBool> (
+            id ("sizeLink"), nm ("Size Link"), false));
+
         params.push_back (std::make_unique<juce::AudioParameterFloat> (
             id ("length"), nm ("Length"),
             juce::NormalisableRange<float> (5.0f, 1000.0f, 1.0f, 0.4f), 200.0f));
+
+        params.push_back (std::make_unique<juce::AudioParameterChoice> (
+            id ("sizeRatio"), nm ("Size Ratio"),
+            juce::StringArray { "1:4", "1:2", "1:1", "2:1", "4:1", "8:1", "16:1" }, 2));
 
         params.push_back (std::make_unique<juce::AudioParameterFloat> (
             id ("pitch"), nm ("Pitch"),

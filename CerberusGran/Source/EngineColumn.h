@@ -34,6 +34,25 @@ public:
         spreadKnob  = makeKnob ("Spread",  "",   "spread");
         rateKnob    = makeKnob ("Rate",    "ms", "rate");
         lenKnob     = makeKnob ("Len",     "ms", "length");
+
+        // Chainlink toggle (links Size to Rate as a ratio)
+        sizeLinkBtn.setButtonText ("Link");
+        sizeLinkBtn.setClickingTogglesState (true);
+        sizeLinkBtn.setColour (juce::TextButton::buttonColourId, juce::Colour (0xff2A2A30));
+        sizeLinkBtn.setColour (juce::TextButton::buttonOnColourId, accent.withAlpha (0.6f));
+        sizeLinkBtn.setColour (juce::TextButton::textColourOffId, juce::Colour (0xff888888));
+        sizeLinkBtn.setColour (juce::TextButton::textColourOnId, juce::Colour (0xffeeeeee));
+        sizeLinkBtn.onClick = [this] { updateSizeLinkVisibility(); };
+        addAndMakeVisible (sizeLinkBtn);
+        sizeLinkAttach = std::make_unique<ButtonAttach> (apvts, id ("sizeLink"), sizeLinkBtn);
+
+        // Size ratio selector (visible when linked)
+        sizeRatioBox.addItemList ({ "1:4", "1:2", "1:1", "2:1", "4:1", "8:1", "16:1" }, 1);
+        sizeRatioBox.setColour (juce::ComboBox::backgroundColourId, juce::Colour (0xff2A2A30));
+        sizeRatioBox.setColour (juce::ComboBox::outlineColourId, juce::Colour (0xff3A3A40));
+        sizeRatioBox.setVisible (false);
+        addAndMakeVisible (sizeRatioBox);
+        sizeRatioAttach = std::make_unique<ComboAttach> (apvts, id ("sizeRatio"), sizeRatioBox);
         pitchKnob   = makeKnob ("Pitch",   "st", "pitch");
         gainKnob    = makeKnob ("Gain",    "dB", "gain");
         reverseKnob = makeKnob ("Reverse", "%",  "reverse");
@@ -81,6 +100,7 @@ public:
 
         // Initial visibility
         updateRateModeVisibility();
+        updateSizeLinkVisibility();
     }
 
     void paint (juce::Graphics& g) override
@@ -140,7 +160,19 @@ public:
             rateKnob->setBounds (rateArea);
         }
 
-        lenKnob->setBounds (row2);
+        // Length area with chainlink
+        auto lenArea = row2;
+        sizeLinkBtn.setBounds (lenArea.removeFromTop (18).reduced (2, 0));
+
+        if (sizeLinkBtn.getToggleState())
+        {
+            // Linked: show ratio selector instead of length knob
+            sizeRatioBox.setBounds (lenArea.removeFromTop (24).reduced (2, 1));
+        }
+        else
+        {
+            lenKnob->setBounds (lenArea);
+        }
 
         auto row3 = area.removeFromTop (knobH);
         pitchKnob->setBounds (row3.removeFromLeft (halfW));
@@ -184,13 +216,18 @@ private:
     // Rate sync controls
     juce::ComboBox rateModeBox, syncDivBox, syncTypeBox;
 
+    // Chainlink controls
+    juce::TextButton sizeLinkBtn;
+    juce::ComboBox sizeRatioBox;
+
     using SliderAttach = juce::AudioProcessorValueTreeState::SliderAttachment;
     using ButtonAttach = juce::AudioProcessorValueTreeState::ButtonAttachment;
     using ComboAttach  = juce::AudioProcessorValueTreeState::ComboBoxAttachment;
 
     std::unique_ptr<ButtonAttach> enableAttach;
     std::unique_ptr<SliderAttach> shapeAttach;
-    std::unique_ptr<ComboAttach> rateModeAttach, syncDivAttach, syncTypeAttach;
+    std::unique_ptr<ComboAttach> rateModeAttach, syncDivAttach, syncTypeAttach, sizeRatioAttach;
+    std::unique_ptr<ButtonAttach> sizeLinkAttach;
     juce::OwnedArray<SliderAttach> knobAttachments;
     std::unique_ptr<juce::ParameterAttachment> enableAttachmentCb;
 
@@ -200,6 +237,14 @@ private:
         rateKnob->setVisible (!isSync);
         syncDivBox.setVisible (isSync);
         syncTypeBox.setVisible (isSync);
+        resized();
+    }
+
+    void updateSizeLinkVisibility()
+    {
+        bool linked = sizeLinkBtn.getToggleState();
+        lenKnob->setVisible (!linked);
+        sizeRatioBox.setVisible (linked);
         resized();
     }
 };

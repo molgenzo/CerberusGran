@@ -82,7 +82,9 @@ private:
         std::atomic<float>* rate = nullptr;
         std::atomic<float>* rateSyncDiv = nullptr;
         std::atomic<float>* rateSyncType = nullptr;
+        std::atomic<float>* sizeLink = nullptr;
         std::atomic<float>* length = nullptr;
+        std::atomic<float>* sizeRatio = nullptr;
         std::atomic<float>* pitch = nullptr;
         std::atomic<float>* shape = nullptr;
         std::atomic<float>* reverse = nullptr;
