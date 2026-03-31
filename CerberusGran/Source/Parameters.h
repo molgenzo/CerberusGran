@@ -124,9 +124,21 @@ inline juce::AudioProcessorValueTreeState::ParameterLayout createParameterLayout
         params.push_back (std::make_unique<juce::AudioParameterBool> (
             id ("delayOn"), nm ("Delay On"), false));
 
+        params.push_back (std::make_unique<juce::AudioParameterChoice> (
+            id ("delayTimeMode"), nm ("Delay Time Mode"),
+            juce::StringArray { "Time", "Sync" }, 0));
+
         params.push_back (std::make_unique<juce::AudioParameterFloat> (
             id ("delayTime"), nm ("Delay Time"),
             juce::NormalisableRange<float> (1.0f, 2000.0f, 1.0f, 0.4f), 250.0f));
+
+        params.push_back (std::make_unique<juce::AudioParameterChoice> (
+            id ("delaySyncDiv"), nm ("Delay Sync Div"),
+            juce::StringArray { "1/1", "1/2", "1/4", "1/8", "1/16", "1/32" }, 3));
+
+        params.push_back (std::make_unique<juce::AudioParameterChoice> (
+            id ("delaySyncType"), nm ("Delay Sync Type"),
+            juce::StringArray { "Normal", "Triplet", "Dotted" }, 0));
 
         params.push_back (std::make_unique<juce::AudioParameterFloat> (
             id ("delayFeedback"), nm ("Delay Fdbk"),

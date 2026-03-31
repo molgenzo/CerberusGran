@@ -17,8 +17,28 @@ void GrainHead::spawnGrain (const RingBuffer& ringBuffer,
     Grain* g = grainPool.acquire();
     if (g == nullptr) return;
 
-    float scatterAmt = spread * (rng.nextFloat() * 2.0f - 1.0f);
-    float pos = juce::jlimit (0.0f, 100.0f, position + scatterAmt) / 100.0f;
+    float pos;
+
+    if (syncGrid && syncGridMs > 0.0f && spread > 0.0f)
+    {
+        // In sync mode: spread snaps grains to nearby grid lines
+        // Grid spacing as percentage of buffer
+        float gridPct = (syncGridMs * 0.001f * static_cast<float> (sampleRate))
+                      / (liveMode ? static_cast<float> (ringBuffer.getBufferSize())
+                                  : (sampleBuffer ? static_cast<float> (sampleBuffer->getNumSamples()) : 1.0f))
+                      * 100.0f;
+
+        // How many grid steps to spread across (based on spread %)
+        int maxSteps = juce::jmax (1, static_cast<int> (spread / gridPct));
+        int step = rng.nextInt (maxSteps * 2 + 1) - maxSteps; // random grid step offset
+        pos = juce::jlimit (0.0f, 100.0f, position + step * gridPct) / 100.0f;
+    }
+    else
+    {
+        // Free mode: random scatter
+        float scatterAmt = spread * (rng.nextFloat() * 2.0f - 1.0f);
+        pos = juce::jlimit (0.0f, 100.0f, position + scatterAmt) / 100.0f;
+    }
 
     if (liveMode)
     {

@@ -44,7 +44,10 @@ CerberusGranAudioProcessor::CerberusGranAudioProcessor()
         hp.crushBits     = apvts.getRawParameterValue (id ("crushBits"));
         hp.crushRate     = apvts.getRawParameterValue (id ("crushRate"));
         hp.delayOn       = apvts.getRawParameterValue (id ("delayOn"));
+        hp.delayTimeMode = apvts.getRawParameterValue (id ("delayTimeMode"));
         hp.delayTime     = apvts.getRawParameterValue (id ("delayTime"));
+        hp.delaySyncDiv  = apvts.getRawParameterValue (id ("delaySyncDiv"));
+        hp.delaySyncType = apvts.getRawParameterValue (id ("delaySyncType"));
         hp.delayFeedback = apvts.getRawParameterValue (id ("delayFeedback"));
         hp.delayMix      = apvts.getRawParameterValue (id ("delayMix"));
         hp.reverbOn      = apvts.getRawParameterValue (id ("reverbOn"));
@@ -85,6 +88,9 @@ void CerberusGranAudioProcessor::updateParametersFromAPVTS()
     int sm = static_cast<int> (sourceModeParam->load());
     sourceMode.store (sm, std::memory_order_relaxed);
     freeze.store (freezeParam->load() >= 0.5f, std::memory_order_relaxed);
+
+    float finestGridMs = 0.0f;
+    bool anySync = false;
 
     for (int h = 0; h < kNumHeads; ++h)
     {
@@ -128,7 +134,22 @@ void CerberusGranAudioProcessor::updateParametersFromAPVTS()
 
                 effectiveRateMs = static_cast<float> (juce::jmax (1.0, noteMs));
                 head.setRate (effectiveRateMs);
+
+                // Pass grid info for quantized spread
+                head.setSyncGrid (true, effectiveRateMs);
             }
+        }
+
+        // If not in sync mode, disable grid
+        if (static_cast<int> (hp.rateMode->load()) == 0)
+        {
+            head.setSyncGrid (false, 0.0f);
+        }
+        else if (hp.enable->load() >= 0.5f)
+        {
+            anySync = true;
+            if (finestGridMs <= 0.0f || effectiveRateMs < finestGridMs)
+                finestGridMs = effectiveRateMs;
         }
 
         // Length: free or linked to rate as a ratio
@@ -161,7 +182,33 @@ void CerberusGranAudioProcessor::updateParametersFromAPVTS()
         head.setCrushRate (hp.crushRate->load());
 
         head.setDelayEnabled (hp.delayOn->load() >= 0.5f);
-        head.setDelayTime (hp.delayTime->load());
+        // Delay time: Time mode uses raw ms, Sync mode calculates from tempo
+        {
+            int dtMode = static_cast<int> (hp.delayTimeMode->load());
+            if (dtMode == 0)
+            {
+                head.setDelayTime (hp.delayTime->load());
+            }
+            else
+            {
+                double bpm = 120.0;
+                if (auto* playHead = getPlayHead())
+                    if (auto pos = playHead->getPosition())
+                        if (auto b = pos->getBpm())
+                            bpm = *b;
+
+                int divIdx = static_cast<int> (hp.delaySyncDiv->load());
+                double divValue = 1.0 / (1 << divIdx);
+                double quarterMs = 60000.0 / bpm;
+                double noteMs = divValue * 4.0 * quarterMs;
+
+                int syncType = static_cast<int> (hp.delaySyncType->load());
+                if (syncType == 1)      noteMs *= 2.0 / 3.0;
+                else if (syncType == 2) noteMs *= 3.0 / 2.0;
+
+                head.setDelayTime (static_cast<float> (juce::jlimit (1.0, 2000.0, noteMs)));
+            }
+        }
         head.setDelayFeedback (hp.delayFeedback->load());
         head.setDelayMix (hp.delayMix->load());
 
@@ -170,6 +217,9 @@ void CerberusGranAudioProcessor::updateParametersFromAPVTS()
         head.setReverbDamp (hp.reverbDamp->load());
         head.setReverbMix (hp.reverbMix->load());
     }
+
+    anySyncActive.store (anySync, std::memory_order_relaxed);
+    syncGridMs.store (finestGridMs, std::memory_order_relaxed);
 }
 
 void CerberusGranAudioProcessor::processBlock (juce::AudioBuffer<float>& buffer,

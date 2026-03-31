@@ -25,6 +25,7 @@ public:
     void setPitchSemitones (float st) { pitchSt = st; }
     void setShape (float s)           { shape = s; }
     void setReversePct (float pct)     { reversePct = pct; }
+    void setSyncGrid (bool on, float gridMs) { syncGrid = on; syncGridMs = gridMs; }
     void setGainDb (float db)         { gainLinear = juce::Decibels::decibelsToGain (db); }
 
     // FX chain setters (forwarded to fxChain)
@@ -76,6 +77,8 @@ private:
     float pitchSt = 0.0f;
     float shape = 0.0f;
     float reversePct = 0.0f;  // 0-100%
+    bool syncGrid = false;
+    float syncGridMs = 0.0f;  // grid spacing in ms (one subdivision)
     float gainLinear = 1.0f;
 
     double sampleRate = 44100.0;

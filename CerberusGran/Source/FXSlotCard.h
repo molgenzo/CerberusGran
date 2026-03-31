@@ -177,8 +177,21 @@ public:
             }
             case FXType::Delay:
             {
+                bool delaySync = (delayTimeModeBox.getSelectedId() == 2);
+                // Mode selector row at top of body
+                auto modeRow = body.removeFromTop (20);
+                auto modeLeft = modeRow.removeFromLeft (modeRow.getWidth() / 2);
+                delayTimeModeBox.setBounds (modeLeft.reduced (1, 0));
+                if (delaySync)
+                    delaySyncTypeBox.setBounds (modeRow.reduced (1, 0));
+
+                body.removeFromTop (2);
+
                 int knobW = body.getWidth() / 3;
-                delayKnobs[0]->setBounds (body.removeFromLeft (knobW));
+                if (delaySync)
+                    delaySyncDivKnob->setBounds (body.removeFromLeft (knobW));
+                else
+                    delayKnobs[0]->setBounds (body.removeFromLeft (knobW));
                 delayKnobs[1]->setBounds (body.removeFromLeft (knobW));
                 delayKnobs[2]->setBounds (body);
                 break;
@@ -197,7 +210,7 @@ public:
 
 private:
     static constexpr int kHeaderHeight = 30;
-    static constexpr int kBodyHeight = 84;
+    static constexpr int kBodyHeight = 96;
 
     juce::AudioProcessorValueTreeState& apvtsRef;
     int head;
@@ -219,8 +232,11 @@ private:
     // Crush knobs
     std::array<RotaryKnob*, 2> crushKnobs {};
 
-    // Delay knobs
+    // Delay knobs + sync controls
     std::array<RotaryKnob*, 3> delayKnobs {};
+    juce::ComboBox delayTimeModeBox;
+    RotaryKnob* delaySyncDivKnob = nullptr;
+    juce::ComboBox delaySyncTypeBox;
 
     // Reverb knobs
     std::array<RotaryKnob*, 3> reverbKnobs {};
@@ -233,6 +249,8 @@ private:
 
     juce::OwnedArray<SliderAttach> sliderAttachments;
     std::unique_ptr<ComboAttach> filterTypeAttach;
+    std::unique_ptr<ComboAttach> delayTimeModeAttach, delaySyncTypeAttach;
+    std::unique_ptr<SliderAttach> delaySyncDivAttach;
 
     juce::String paramId (const juce::String& name) const
     {
@@ -275,6 +293,38 @@ private:
         delayKnobs[0] = makeKnob ("Time", " ms", "delayTime");
         delayKnobs[1] = makeKnob ("Fdbk", "", "delayFeedback");
         delayKnobs[2] = makeKnob ("Mix", "", "delayMix");
+
+        // Delay time mode (Time / Sync)
+        delayTimeModeBox.addItemList ({ "Time", "Sync" }, 1);
+        delayTimeModeBox.setColour (juce::ComboBox::backgroundColourId, juce::Colour (0xff2A2A30));
+        delayTimeModeBox.setColour (juce::ComboBox::outlineColourId, juce::Colour (0xff3A3A40));
+        delayTimeModeBox.onChange = [this] { updateDelayModeVisibility(); };
+        delayTimeModeBox.setVisible (false);
+        addAndMakeVisible (delayTimeModeBox);
+        delayTimeModeAttach = std::make_unique<ComboAttach> (apvtsRef, paramId ("delayTimeMode"), delayTimeModeBox);
+
+        // Delay sync div (stepped knob)
+        delaySyncDivKnob = new RotaryKnob ("Div", "");
+        delaySyncDivKnob->setAccentColour (accentColour);
+        delaySyncDivKnob->getSlider().setRange (0, 5, 1);
+        delaySyncDivKnob->getSlider().textFromValueFunction = [] (double v)
+        {
+            static const char* labels[] = { "1/1", "1/2", "1/4", "1/8", "1/16", "1/32" };
+            return juce::String (labels[juce::jlimit (0, 5, static_cast<int> (v))]);
+        };
+        delaySyncDivKnob->getSlider().updateText();
+        delaySyncDivKnob->setVisible (false);
+        addAndMakeVisible (delaySyncDivKnob);
+        allKnobs.add (delaySyncDivKnob);
+        delaySyncDivAttach = std::make_unique<SliderAttach> (apvtsRef, paramId ("delaySyncDiv"), delaySyncDivKnob->getSlider());
+
+        // Delay sync type
+        delaySyncTypeBox.addItemList ({ "Norm", "Trip", "Dot" }, 1);
+        delaySyncTypeBox.setColour (juce::ComboBox::backgroundColourId, juce::Colour (0xff2A2A30));
+        delaySyncTypeBox.setColour (juce::ComboBox::outlineColourId, juce::Colour (0xff3A3A40));
+        delaySyncTypeBox.setVisible (false);
+        addAndMakeVisible (delaySyncTypeBox);
+        delaySyncTypeAttach = std::make_unique<ComboAttach> (apvtsRef, paramId ("delaySyncType"), delaySyncTypeBox);
     }
 
     void createReverbKnobs()
@@ -288,6 +338,8 @@ private:
     {
         for (auto* k : allKnobs) k->setVisible (false);
         filterTypeBox.setVisible (false);
+        delayTimeModeBox.setVisible (false);
+        delaySyncTypeBox.setVisible (false);
     }
 
     void updateKnobVisibility()
@@ -305,8 +357,16 @@ private:
                 for (auto* k : crushKnobs) if (k) k->setVisible (true);
                 break;
             case FXType::Delay:
-                for (auto* k : delayKnobs) if (k) k->setVisible (true);
+            {
+                bool delaySync = (delayTimeModeBox.getSelectedId() == 2);
+                delayTimeModeBox.setVisible (true);
+                delayKnobs[0]->setVisible (!delaySync); // Time knob hidden in sync
+                delaySyncDivKnob->setVisible (delaySync);
+                delaySyncTypeBox.setVisible (delaySync);
+                delayKnobs[1]->setVisible (true); // Fdbk always
+                delayKnobs[2]->setVisible (true); // Mix always
                 break;
+            }
             case FXType::Reverb:
                 for (auto* k : reverbKnobs) if (k) k->setVisible (true);
                 break;
@@ -428,5 +488,17 @@ private:
 
         activeDot.active = isActive;
         activeDot.repaint();
+    }
+
+    void updateDelayModeVisibility()
+    {
+        if (selectedType != FXType::Delay) return;
+        updateKnobVisibility();
+        resized();
+        if (auto* parent = getParentComponent())
+        {
+            parent->resized();
+            if (auto* gp = parent->getParentComponent()) gp->resized();
+        }
     }
 };

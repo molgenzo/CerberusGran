@@ -48,6 +48,10 @@ public:
 
     juce::AudioProcessorValueTreeState apvts;
 
+    // Grid info for waveform display (set during updateParametersFromAPVTS)
+    std::atomic<float> syncGridMs { 0.0f };    // 0 = no grid
+    std::atomic<bool> anySyncActive { false };
+
 private:
     void updateParametersFromAPVTS();
 
@@ -98,7 +102,10 @@ private:
         std::atomic<float>* crushBits = nullptr;
         std::atomic<float>* crushRate = nullptr;
         std::atomic<float>* delayOn = nullptr;
+        std::atomic<float>* delayTimeMode = nullptr;
         std::atomic<float>* delayTime = nullptr;
+        std::atomic<float>* delaySyncDiv = nullptr;
+        std::atomic<float>* delaySyncType = nullptr;
         std::atomic<float>* delayFeedback = nullptr;
         std::atomic<float>* delayMix = nullptr;
         std::atomic<float>* reverbOn = nullptr;

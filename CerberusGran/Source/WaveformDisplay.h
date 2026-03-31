@@ -94,6 +94,38 @@ public:
             g.fillRoundedRectangle (bounds, 6.0f);
         }
 
+        // Sync grid lines
+        if (processor.anySyncActive.load (std::memory_order_relaxed))
+        {
+            float gridMs = processor.syncGridMs.load (std::memory_order_relaxed);
+            if (gridMs > 0.0f)
+            {
+                // Grid spacing as fraction of the buffer
+                float bufferMs;
+                if (isLive)
+                    bufferMs = static_cast<float> (processor.getRingBuffer().getBufferSize())
+                             / static_cast<float> (processor.getCurrentSampleRate()) * 1000.0f;
+                else
+                    bufferMs = static_cast<float> (thumbnail.getTotalLength()) * 1000.0f;
+
+                if (bufferMs > 0.0f)
+                {
+                    float gridFraction = gridMs / bufferMs;
+                    int numLines = static_cast<int> (1.0f / gridFraction);
+                    numLines = juce::jmin (numLines, 200); // cap to avoid drawing thousands
+
+                    g.setColour (juce::Colour (0xffffffff).withAlpha (0.06f));
+                    for (int i = 1; i < numLines; ++i)
+                    {
+                        float xNorm = i * gridFraction;
+                        int x = inner.getX() + static_cast<int> (xNorm * inner.getWidth());
+                        g.drawVerticalLine (x, static_cast<float> (inner.getY()),
+                                           static_cast<float> (inner.getBottom()));
+                    }
+                }
+            }
+        }
+
         // Head position markers
         for (int i = 0; i < 5; ++i)
         {

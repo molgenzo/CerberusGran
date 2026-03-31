@@ -34,6 +34,40 @@ public:
         spreadKnob  = makeKnob ("Spread",  "",   "spread");
         rateKnob    = makeKnob ("Rate",    "ms", "rate");
         lenKnob     = makeKnob ("Len",     "ms", "length");
+        pitchKnob   = makeKnob ("Pitch",   "st", "pitch");
+        gainKnob    = makeKnob ("Gain",    "dB", "gain");
+        reverseKnob = makeKnob ("Reverse", "%",  "reverse");
+
+        // Sync division knob (stepped rotary — maps to Choice param)
+        syncDivKnob = new RotaryKnob ("Div", "");
+        syncDivKnob->setAccentColour (accent);
+        syncDivKnob->getSlider().setRange (0, 8, 1);
+        syncDivKnob->getSlider().textFromValueFunction = [] (double v)
+        {
+            static const char* labels[] = { "1/1", "1/2", "1/4", "1/8", "1/16", "1/32", "1/64", "1/128", "1/256" };
+            int i = juce::jlimit (0, 8, static_cast<int> (v));
+            return juce::String (labels[i]);
+        };
+        syncDivKnob->getSlider().updateText();
+        syncDivKnob->setVisible (false);
+        addAndMakeVisible (syncDivKnob);
+        syncDivAttach = std::make_unique<SliderAttach> (apvts, id ("rateSyncDiv"), syncDivKnob->getSlider());
+
+        // Rate mode toggle (Time / Sync)
+        rateModeBox.addItemList ({ "Time", "Sync" }, 1);
+        rateModeBox.setColour (juce::ComboBox::backgroundColourId, juce::Colour (0xff2A2A30));
+        rateModeBox.setColour (juce::ComboBox::outlineColourId, juce::Colour (0xff3A3A40));
+        rateModeBox.onChange = [this] { updateRateModeVisibility(); };
+        addAndMakeVisible (rateModeBox);
+        rateModeAttach = std::make_unique<ComboAttach> (apvts, id ("rateMode"), rateModeBox);
+
+        // Sync type selector (Normal / Triplet / Dotted) — side by side
+        syncTypeBox.addItemList ({ "Norm", "Trip", "Dot" }, 1);
+        syncTypeBox.setColour (juce::ComboBox::backgroundColourId, juce::Colour (0xff2A2A30));
+        syncTypeBox.setColour (juce::ComboBox::outlineColourId, juce::Colour (0xff3A3A40));
+        syncTypeBox.setVisible (false);
+        addAndMakeVisible (syncTypeBox);
+        syncTypeAttach = std::make_unique<ComboAttach> (apvts, id ("rateSyncType"), syncTypeBox);
 
         // Chainlink toggle (links Size to Rate as a ratio)
         sizeLinkBtn.setButtonText ("Link");
@@ -46,40 +80,20 @@ public:
         addAndMakeVisible (sizeLinkBtn);
         sizeLinkAttach = std::make_unique<ButtonAttach> (apvts, id ("sizeLink"), sizeLinkBtn);
 
-        // Size ratio selector (visible when linked)
-        sizeRatioBox.addItemList ({ "1:4", "1:2", "1:1", "2:1", "4:1", "8:1", "16:1" }, 1);
-        sizeRatioBox.setColour (juce::ComboBox::backgroundColourId, juce::Colour (0xff2A2A30));
-        sizeRatioBox.setColour (juce::ComboBox::outlineColourId, juce::Colour (0xff3A3A40));
-        sizeRatioBox.setVisible (false);
-        addAndMakeVisible (sizeRatioBox);
-        sizeRatioAttach = std::make_unique<ComboAttach> (apvts, id ("sizeRatio"), sizeRatioBox);
-        pitchKnob   = makeKnob ("Pitch",   "st", "pitch");
-        gainKnob    = makeKnob ("Gain",    "dB", "gain");
-        reverseKnob = makeKnob ("Reverse", "%",  "reverse");
-
-        // Rate mode toggle (Time / Sync)
-        rateModeBox.addItemList ({ "Time", "Sync" }, 1);
-        rateModeBox.setColour (juce::ComboBox::backgroundColourId, juce::Colour (0xff2A2A30));
-        rateModeBox.setColour (juce::ComboBox::outlineColourId, juce::Colour (0xff3A3A40));
-        rateModeBox.onChange = [this] { updateRateModeVisibility(); };
-        addAndMakeVisible (rateModeBox);
-        rateModeAttach = std::make_unique<ComboAttach> (apvts, id ("rateMode"), rateModeBox);
-
-        // Sync division selector
-        syncDivBox.addItemList ({ "1/1", "1/2", "1/4", "1/8", "1/16", "1/32", "1/64", "1/128", "1/256" }, 1);
-        syncDivBox.setColour (juce::ComboBox::backgroundColourId, juce::Colour (0xff2A2A30));
-        syncDivBox.setColour (juce::ComboBox::outlineColourId, juce::Colour (0xff3A3A40));
-        syncDivBox.setVisible (false);
-        addAndMakeVisible (syncDivBox);
-        syncDivAttach = std::make_unique<ComboAttach> (apvts, id ("rateSyncDiv"), syncDivBox);
-
-        // Sync type selector (Normal / Triplet / Dotted)
-        syncTypeBox.addItemList ({ "Norm", "Trip", "Dot" }, 1);
-        syncTypeBox.setColour (juce::ComboBox::backgroundColourId, juce::Colour (0xff2A2A30));
-        syncTypeBox.setColour (juce::ComboBox::outlineColourId, juce::Colour (0xff3A3A40));
-        syncTypeBox.setVisible (false);
-        addAndMakeVisible (syncTypeBox);
-        syncTypeAttach = std::make_unique<ComboAttach> (apvts, id ("rateSyncType"), syncTypeBox);
+        // Size ratio knob (stepped rotary, visible when linked)
+        sizeRatioKnob = new RotaryKnob ("Ratio", "");
+        sizeRatioKnob->setAccentColour (accent);
+        sizeRatioKnob->getSlider().setRange (0, 6, 1);
+        sizeRatioKnob->getSlider().textFromValueFunction = [] (double v)
+        {
+            static const char* labels[] = { "1:4", "1:2", "1:1", "2:1", "4:1", "8:1", "16:1" };
+            int i = juce::jlimit (0, 6, static_cast<int> (v));
+            return juce::String (labels[i]);
+        };
+        sizeRatioKnob->getSlider().updateText();
+        sizeRatioKnob->setVisible (false);
+        addAndMakeVisible (sizeRatioKnob);
+        sizeRatioAttach = std::make_unique<SliderAttach> (apvts, id ("sizeRatio"), sizeRatioKnob->getSlider());
 
         // Grain shape knob (continuous morph)
         shapeKnob.setAccentColour (accent);
@@ -134,57 +148,58 @@ public:
 
         area.removeFromTop (22); // "GRAIN" label space
 
-        // Knob grid: 2 columns x 4 rows
         int knobH = 80;
-        int halfW = area.getWidth() / 2;
+        int fullW = area.getWidth();
+        int halfW = fullW / 2;
 
+        // Row 1: Pos, Spread
         auto row1 = area.removeFromTop (knobH);
         posKnob->setBounds (row1.removeFromLeft (halfW));
         spreadKnob->setBounds (row1);
 
+        // Rate mode selector row (both selectors on left half only)
+        auto modeRow = area.removeFromTop (20);
+        bool isSync = (rateModeBox.getSelectedId() == 2);
+        auto modeLeft = modeRow.removeFromLeft (halfW);
+        int modeHalf = modeLeft.getWidth() / 2;
+        rateModeBox.setBounds (modeLeft.removeFromLeft (modeHalf).reduced (2, 0));
+        if (isSync)
+            syncTypeBox.setBounds (modeLeft.reduced (2, 0));
+
+        // Row 2: Rate knob (or sync div knob) | Link | Len knob (or ratio knob)
         auto row2 = area.removeFromTop (knobH);
-        auto rateArea = row2.removeFromLeft (halfW);
 
-        // Rate mode selector at top of rate area
-        rateModeBox.setBounds (rateArea.removeFromTop (20).reduced (2, 0));
-
-        if (rateModeBox.getSelectedId() == 2) // Sync
-        {
-            // Show division and type dropdowns
-            syncDivBox.setBounds (rateArea.removeFromTop (22).reduced (2, 1));
-            syncTypeBox.setBounds (rateArea.removeFromTop (22).reduced (2, 1));
-        }
+        // Rate side (left)
+        auto rateSide = row2.removeFromLeft (halfW - 16);
+        if (isSync)
+            syncDivKnob->setBounds (rateSide);
         else
-        {
-            // Show rate knob
-            rateKnob->setBounds (rateArea);
-        }
+            rateKnob->setBounds (rateSide);
 
-        // Length area with chainlink
-        auto lenArea = row2;
-        sizeLinkBtn.setBounds (lenArea.removeFromTop (18).reduced (2, 0));
+        // Link button (narrow, between rate and len)
+        auto linkArea = row2.removeFromLeft (32);
+        sizeLinkBtn.setBounds (linkArea.withHeight (20).withY (linkArea.getCentreY() - 10));
 
+        // Length side (right)
+        auto lenSide = row2;
         if (sizeLinkBtn.getToggleState())
-        {
-            // Linked: show ratio selector instead of length knob
-            sizeRatioBox.setBounds (lenArea.removeFromTop (24).reduced (2, 1));
-        }
+            sizeRatioKnob->setBounds (lenSide);
         else
-        {
-            lenKnob->setBounds (lenArea);
-        }
+            lenKnob->setBounds (lenSide);
 
+        // Row 3: Pitch, Gain
         auto row3 = area.removeFromTop (knobH);
         pitchKnob->setBounds (row3.removeFromLeft (halfW));
         gainKnob->setBounds (row3);
 
+        // Row 4: Reverse
         auto row4 = area.removeFromTop (knobH);
         reverseKnob->setBounds (row4.removeFromLeft (halfW));
 
         // Spacing before grain shape
         area.removeFromTop (8);
 
-        // Grain shape knob (centered, taller for the preview)
+        // Grain shape knob
         shapeKnob.setBounds (area.removeFromTop (80));
 
         // Spacing before FX chain
@@ -208,17 +223,18 @@ private:
     RotaryKnob* pitchKnob = nullptr;
     RotaryKnob* gainKnob = nullptr;
     RotaryKnob* reverseKnob = nullptr;
+    RotaryKnob* syncDivKnob = nullptr;
 
     GrainShapeKnob shapeKnob;
     FXChainPanel fxPanel;
     juce::Viewport fxViewport;
 
     // Rate sync controls
-    juce::ComboBox rateModeBox, syncDivBox, syncTypeBox;
+    juce::ComboBox rateModeBox, syncTypeBox;
 
     // Chainlink controls
     juce::TextButton sizeLinkBtn;
-    juce::ComboBox sizeRatioBox;
+    RotaryKnob* sizeRatioKnob = nullptr;
 
     using SliderAttach = juce::AudioProcessorValueTreeState::SliderAttachment;
     using ButtonAttach = juce::AudioProcessorValueTreeState::ButtonAttachment;
@@ -226,7 +242,9 @@ private:
 
     std::unique_ptr<ButtonAttach> enableAttach;
     std::unique_ptr<SliderAttach> shapeAttach;
-    std::unique_ptr<ComboAttach> rateModeAttach, syncDivAttach, syncTypeAttach, sizeRatioAttach;
+    std::unique_ptr<SliderAttach> syncDivAttach;
+    std::unique_ptr<SliderAttach> sizeRatioAttach;
+    std::unique_ptr<ComboAttach> rateModeAttach, syncTypeAttach;
     std::unique_ptr<ButtonAttach> sizeLinkAttach;
     juce::OwnedArray<SliderAttach> knobAttachments;
     std::unique_ptr<juce::ParameterAttachment> enableAttachmentCb;
@@ -235,7 +253,7 @@ private:
     {
         bool isSync = (rateModeBox.getSelectedId() == 2);
         rateKnob->setVisible (!isSync);
-        syncDivBox.setVisible (isSync);
+        syncDivKnob->setVisible (isSync);
         syncTypeBox.setVisible (isSync);
         resized();
     }
@@ -244,7 +262,7 @@ private:
     {
         bool linked = sizeLinkBtn.getToggleState();
         lenKnob->setVisible (!linked);
-        sizeRatioBox.setVisible (linked);
+        sizeRatioKnob->setVisible (linked);
         resized();
     }
 };
