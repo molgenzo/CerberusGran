@@ -1,12 +1,12 @@
 cmake_minimum_required(VERSION 3.15)
 
-project(CerberusGran VERSION 0.1.0)
+project(PocketGranules VERSION 0.1.0)
 
 set(JUCE_DIR "${CMAKE_CURRENT_SOURCE_DIR}/../JUCE")
 
 add_subdirectory(${JUCE_DIR} JUCE)
 
-juce_add_plugin(CerberusGran
+juce_add_plugin(PocketGranules
     COMPANY_NAME "Ishaan"
     IS_SYNTH FALSE
     NEEDS_MIDI_INPUT FALSE
@@ -14,12 +14,12 @@ juce_add_plugin(CerberusGran
     IS_MIDI_EFFECT FALSE
     COPY_PLUGIN_AFTER_BUILD TRUE
     PLUGIN_MANUFACTURER_CODE Ishn
-    PLUGIN_CODE CbrG
+    PLUGIN_CODE PkGr
     FORMATS VST3 AU
-    PRODUCT_NAME "CerberusGran"
+    PRODUCT_NAME "PocketGranules"
 )
 
-target_sources(CerberusGran PRIVATE
+target_sources(PocketGranules PRIVATE
     Source/PluginProcessor.cpp
     Source/PluginProcessor.h
     Source/PluginEditor.cpp
@@ -43,29 +43,29 @@ target_sources(CerberusGran PRIVATE
     Source/GlobalBar.h
 )
 
-target_compile_definitions(CerberusGran_VST3 PRIVATE JUCE_VST3_CAN_REPLACE_VST2=0)
+target_compile_definitions(PocketGranules_VST3 PRIVATE JUCE_VST3_CAN_REPLACE_VST2=0)
 
-target_link_libraries(CerberusGran PRIVATE
+target_link_libraries(PocketGranules PRIVATE
     juce::juce_audio_utils
     juce::juce_dsp
     juce::juce_gui_extra
 )
 
-juce_generate_juce_header(CerberusGran)
+juce_generate_juce_header(PocketGranules)
 
 # Auto-copy to system-wide plugin directories (delete old bundle first so DAW re-reads)
-add_custom_command(TARGET CerberusGran_AU POST_BUILD
-    COMMAND ${CMAKE_COMMAND} -E rm -rf "/Library/Audio/Plug-Ins/Components/CerberusGran.component"
+add_custom_command(TARGET PocketGranules_AU POST_BUILD
+    COMMAND ${CMAKE_COMMAND} -E rm -rf "/Library/Audio/Plug-Ins/Components/PocketGranules.component"
     COMMAND ${CMAKE_COMMAND} -E copy_directory
-        "$<TARGET_BUNDLE_DIR:CerberusGran_AU>"
-        "/Library/Audio/Plug-Ins/Components/CerberusGran.component"
+        "$<TARGET_BUNDLE_DIR:PocketGranules_AU>"
+        "/Library/Audio/Plug-Ins/Components/PocketGranules.component"
     COMMENT "Installing AU to /Library/Audio/Plug-Ins/Components/"
 )
 
-add_custom_command(TARGET CerberusGran_VST3 POST_BUILD
-    COMMAND ${CMAKE_COMMAND} -E rm -rf "/Library/Audio/Plug-Ins/VST3/CerberusGran.vst3"
+add_custom_command(TARGET PocketGranules_VST3 POST_BUILD
+    COMMAND ${CMAKE_COMMAND} -E rm -rf "/Library/Audio/Plug-Ins/VST3/PocketGranules.vst3"
     COMMAND ${CMAKE_COMMAND} -E copy_directory
-        "$<TARGET_BUNDLE_DIR:CerberusGran_VST3>"
-        "/Library/Audio/Plug-Ins/VST3/CerberusGran.vst3"
+        "$<TARGET_BUNDLE_DIR:PocketGranules_VST3>"
+        "/Library/Audio/Plug-Ins/VST3/PocketGranules.vst3"
     COMMENT "Installing VST3 to /Library/Audio/Plug-Ins/VST3/"
 )

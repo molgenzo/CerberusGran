@@ -5,7 +5,7 @@
 
 enum class FXType { None = -1, Filter = 0, Bitcrush = 1, Delay = 2, Reverb = 3 };
 
-// Circular toggle dot — fills solid green when active
+// Circular toggle dot
 class ActiveDot : public juce::Component
 {
 public:
@@ -32,10 +32,12 @@ public:
 class FXSlotCard : public juce::Component
 {
 public:
+    static constexpr int kFixedHeight = 118;
+
     FXSlotCard (juce::AudioProcessorValueTreeState& apvts, int headIndex, juce::Colour accent)
         : apvtsRef (apvts), head (headIndex), accentColour (accent)
     {
-        // FX type selector (id 1=None, 2=Filter, 3=Bitcrush, 4=Delay, 5=Reverb)
+        // FX type selector
         fxSelector.addItem ("None", 1);
         fxSelector.addItem ("Filter", 2);
         fxSelector.addItem ("Bitcrush", 3);
@@ -43,19 +45,13 @@ public:
         fxSelector.addItem ("Reverb", 5);
         fxSelector.setSelectedId (1, juce::dontSendNotification);
         fxSelector.setTextWhenNothingSelected ("+ add FX");
-        fxSelector.setColour (juce::ComboBox::backgroundColourId, juce::Colour (0xff2A2A30));
+        fxSelector.setColour (juce::ComboBox::backgroundColourId, juce::Colours::transparentBlack);
         fxSelector.setColour (juce::ComboBox::outlineColourId, juce::Colours::transparentBlack);
         fxSelector.setColour (juce::ComboBox::textColourId, juce::Colour (0xffcccccc));
         fxSelector.onChange = [this] { onFxTypeChanged(); };
         addAndMakeVisible (fxSelector);
 
-        // Chevron (painted triangle)
-        chevronBtn.setColour (juce::TextButton::buttonColourId, juce::Colours::transparentBlack);
-        chevronBtn.setColour (juce::TextButton::textColourOffId, juce::Colours::transparentBlack);
-        chevronBtn.onClick = [this] { setCollapsed (!collapsed); };
-        addAndMakeVisible (chevronBtn);
-
-        // Active dot (circular toggle, uses head accent colour)
+        // Active dot
         activeDot.accentColour = accent;
         addAndMakeVisible (activeDot);
         activeDot.onClick = [this] { toggleActive(); };
@@ -69,27 +65,11 @@ public:
         hideAllKnobs();
     }
 
-    void setCollapsed (bool c)
-    {
-        collapsed = c;
-        updateKnobVisibility();
-
-        if (auto* parent = getParentComponent())
-        {
-            parent->resized();
-            // Also update the viewport in the grandparent (EngineColumn)
-            if (auto* grandparent = parent->getParentComponent())
-                grandparent->resized();
-        }
-    }
-
-    bool isCollapsed() const { return collapsed; }
     FXType getSelectedType() const { return selectedType; }
+    int getIdealHeight() const { return kFixedHeight; }
 
-    // Callback when this slot's selection changes
     std::function<void()> onSelectionChanged;
 
-    // Disable items in dropdown that are used by other slots
     void setDisabledEffects (const std::set<FXType>& usedByOthers)
     {
         for (int i = 0; i < fxSelector.getNumItems(); ++i)
@@ -102,61 +82,33 @@ public:
         }
     }
 
-    int getIdealHeight() const
-    {
-        if (selectedType == FXType::None) return kHeaderHeight;
-        return collapsed ? kHeaderHeight : (kHeaderHeight + kBodyHeight);
-    }
-
     void paint (juce::Graphics& g) override
     {
         auto b = getLocalBounds().toFloat();
-        g.setColour (juce::Colour (0xff252528));
-        g.fillRoundedRectangle (b, 4.0f);
-        g.setColour (juce::Colour (0xff3A3A40));
-        g.drawRoundedRectangle (b.reduced (0.5f), 4.0f, 0.5f);
 
-        // ActiveDot component handles its own painting
+        // Slot background — per-head accent tint
+        g.setColour (accentColour.withAlpha (0.20f));
+        g.fillRoundedRectangle (b, 10.0f);
 
-        // Chevron triangle (only if an FX is selected)
-        if (selectedType != FXType::None)
-        {
-            float cx = static_cast<float> (getWidth()) - 16.0f;
-            float cy = kHeaderHeight * 0.5f;
-
-            juce::Path tri;
-            if (collapsed)
-            {
-                // Down triangle ▼
-                tri.addTriangle (cx - 5.0f, cy - 3.0f, cx + 5.0f, cy - 3.0f, cx, cy + 4.0f);
-            }
-            else
-            {
-                // Up triangle ▲
-                tri.addTriangle (cx - 5.0f, cy + 3.0f, cx + 5.0f, cy + 3.0f, cx, cy - 4.0f);
-            }
-            g.setColour (juce::Colour (0xff888888));
-            g.fillPath (tri);
-        }
+        // Header pill bar — dark rounded rectangle at top
+        auto headerRect = b.removeFromTop (kHeaderHeight).reduced (2.0f, 2.0f);
+        g.setColour (juce::Colour (0xff1E1E24));
+        g.fillRoundedRectangle (headerRect, headerRect.getHeight() * 0.45f);
     }
 
     void resized() override
     {
         auto area = getLocalBounds();
-        auto header = area.removeFromTop (kHeaderHeight);
 
-        // Active dot click area
-        activeDot.setBounds (header.removeFromLeft (28));
+        // Header pill area
+        auto header = area.removeFromTop (kHeaderHeight).reduced (2, 2);
+        activeDot.setBounds (header.removeFromLeft (22));
+        fxSelector.setBounds (header.reduced (2, 1));
 
-        // Chevron click area
-        chevronBtn.setBounds (header.removeFromRight (28));
-
-        // FX selector fills remaining header
-        fxSelector.setBounds (header.reduced (2, 2));
-
-        if (collapsed || selectedType == FXType::None) return;
-
+        // Body: knobs area
         auto body = area.reduced (4, 2);
+
+        if (selectedType == FXType::None) return;
 
         switch (selectedType)
         {
@@ -165,7 +117,7 @@ public:
                 int knobW = body.getWidth() / 3;
                 filterKnobs[0]->setBounds (body.removeFromLeft (knobW));
                 filterKnobs[1]->setBounds (body.removeFromLeft (knobW));
-                filterTypeBox.setBounds (body.withHeight (20).withY (body.getCentreY() - 10));
+                filterTypeBox.setBounds (body.withHeight (18).withY (body.getCentreY() - 9));
                 break;
             }
             case FXType::Bitcrush:
@@ -178,15 +130,13 @@ public:
             case FXType::Delay:
             {
                 bool delaySync = (delayTimeModeBox.getSelectedId() == 2);
-                // Mode selector row at top of body
-                auto modeRow = body.removeFromTop (20);
+                auto modeRow = body.removeFromTop (18);
                 auto modeLeft = modeRow.removeFromLeft (modeRow.getWidth() / 2);
                 delayTimeModeBox.setBounds (modeLeft.reduced (1, 0));
                 if (delaySync)
                     delaySyncTypeBox.setBounds (modeRow.reduced (1, 0));
 
                 body.removeFromTop (2);
-
                 int knobW = body.getWidth() / 3;
                 if (delaySync)
                     delaySyncDivKnob->setBounds (body.removeFromLeft (knobW));
@@ -209,21 +159,16 @@ public:
     }
 
 private:
-    static constexpr int kHeaderHeight = 30;
-    static constexpr int kBodyHeight = 96;
+    static constexpr int kHeaderHeight = 26;
 
     juce::AudioProcessorValueTreeState& apvtsRef;
     int head;
     juce::Colour accentColour;
     FXType selectedType = FXType::None;
-    bool collapsed = true;
     bool isActive = false;
 
     juce::ComboBox fxSelector;
-    juce::TextButton chevronBtn;
     ActiveDot activeDot;
-
-private:
 
     // Filter knobs
     std::array<RotaryKnob*, 2> filterKnobs {};
@@ -276,7 +221,7 @@ private:
 
         filterTypeBox.addItemList ({ "LP", "HP", "BP" }, 1);
         filterTypeBox.setColour (juce::ComboBox::outlineColourId, juce::Colours::transparentBlack);
-        filterTypeBox.setColour (juce::ComboBox::backgroundColourId, juce::Colours::transparentBlack);
+        filterTypeBox.setColour (juce::ComboBox::backgroundColourId, juce::Colour (0xff2A2A30));
         filterTypeBox.setVisible (false);
         addAndMakeVisible (filterTypeBox);
         filterTypeAttach = std::make_unique<ComboAttach> (apvtsRef, paramId ("filterType"), filterTypeBox);
@@ -294,18 +239,16 @@ private:
         delayKnobs[1] = makeKnob ("Fdbk", "", "delayFeedback");
         delayKnobs[2] = makeKnob ("Mix", "", "delayMix");
 
-        // Delay time mode (Time / Sync)
         delayTimeModeBox.addItemList ({ "Time", "Sync" }, 1);
-        delayTimeModeBox.setColour (juce::ComboBox::backgroundColourId, juce::Colours::transparentBlack);
+        delayTimeModeBox.setColour (juce::ComboBox::backgroundColourId, juce::Colour (0xff2A2A30));
         delayTimeModeBox.setColour (juce::ComboBox::outlineColourId, juce::Colours::transparentBlack);
         delayTimeModeBox.onChange = [this] { updateDelayModeVisibility(); };
         delayTimeModeBox.setVisible (false);
         addAndMakeVisible (delayTimeModeBox);
         delayTimeModeAttach = std::make_unique<ComboAttach> (apvtsRef, paramId ("delayTimeMode"), delayTimeModeBox);
 
-        // Delay sync div (stepped knob)
         delaySyncDivKnob = new RotaryKnob ("Div", "");
-        delaySyncDivKnob->setAccentColour (accentColour);
+        delaySyncDivKnob->setAccentColour (juce::Colour (0xff8B5CF6));
         delaySyncDivKnob->getSlider().setRange (0, 5, 1);
         delaySyncDivKnob->getSlider().textFromValueFunction = [] (double v)
         {
@@ -318,9 +261,8 @@ private:
         allKnobs.add (delaySyncDivKnob);
         delaySyncDivAttach = std::make_unique<SliderAttach> (apvtsRef, paramId ("delaySyncDiv"), delaySyncDivKnob->getSlider());
 
-        // Delay sync type
         delaySyncTypeBox.addItemList ({ "Norm", "Trip", "Dot" }, 1);
-        delaySyncTypeBox.setColour (juce::ComboBox::backgroundColourId, juce::Colours::transparentBlack);
+        delaySyncTypeBox.setColour (juce::ComboBox::backgroundColourId, juce::Colour (0xff2A2A30));
         delaySyncTypeBox.setColour (juce::ComboBox::outlineColourId, juce::Colours::transparentBlack);
         delaySyncTypeBox.setVisible (false);
         addAndMakeVisible (delaySyncTypeBox);
@@ -345,7 +287,7 @@ private:
     void updateKnobVisibility()
     {
         hideAllKnobs();
-        if (collapsed || selectedType == FXType::None) return;
+        if (selectedType == FXType::None) return;
 
         switch (selectedType)
         {
@@ -360,11 +302,11 @@ private:
             {
                 bool delaySync = (delayTimeModeBox.getSelectedId() == 2);
                 delayTimeModeBox.setVisible (true);
-                delayKnobs[0]->setVisible (!delaySync); // Time knob hidden in sync
+                delayKnobs[0]->setVisible (!delaySync);
                 delaySyncDivKnob->setVisible (delaySync);
                 delaySyncTypeBox.setVisible (delaySync);
-                delayKnobs[1]->setVisible (true); // Fdbk always
-                delayKnobs[2]->setVisible (true); // Mix always
+                delayKnobs[1]->setVisible (true);
+                delayKnobs[2]->setVisible (true);
                 break;
             }
             case FXType::Reverb:
@@ -392,7 +334,6 @@ private:
                 p->setValueNotifyingHost (0.0f);
         }
 
-        // Map new selection: 1=None, 2=Filter, 3=Bitcrush, 4=Delay, 5=Reverb
         int sel = fxSelector.getSelectedId();
         if (sel <= 1)
             selectedType = FXType::None;
@@ -425,26 +366,15 @@ private:
         }
 
         updateKnobVisibility();
+        resized();
 
-        // Auto-expand when selecting an FX, collapse when None
-        if (selectedType == FXType::None && !collapsed)
-            setCollapsed (true);
-        else if (selectedType != FXType::None && collapsed)
-            setCollapsed (false);
-        else
+        if (auto* parent = getParentComponent())
         {
-            // Already expanded — just re-layout to show new knobs
-            resized();
-            if (auto* parent = getParentComponent())
-            {
-                parent->resized();
-                if (auto* gp = parent->getParentComponent()) gp->resized();
-            }
+            parent->resized();
+            if (auto* gp = parent->getParentComponent()) gp->resized();
         }
 
-        // Notify panel to update available effects in sibling slots
-        if (onSelectionChanged)
-            onSelectionChanged();
+        if (onSelectionChanged) onSelectionChanged();
     }
 
     void toggleActive()
@@ -469,25 +399,6 @@ private:
         activeDot.active = isActive;
         activeDot.repaint();
         repaint();
-    }
-
-    void updateActiveState()
-    {
-        juce::String pName;
-        switch (selectedType)
-        {
-            case FXType::Filter:   pName = "filterOn"; break;
-            case FXType::Bitcrush: pName = "crushOn"; break;
-            case FXType::Delay:    pName = "delayOn"; break;
-            case FXType::Reverb:   pName = "reverbOn"; break;
-            default: isActive = false; return;
-        }
-
-        if (auto* p = apvtsRef.getRawParameterValue (paramId (pName)))
-            isActive = p->load() >= 0.5f;
-
-        activeDot.active = isActive;
-        activeDot.repaint();
     }
 
     void updateDelayModeVisibility()

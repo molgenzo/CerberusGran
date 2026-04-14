@@ -14,8 +14,8 @@ public:
 
         label.setText ("Shape", juce::dontSendNotification);
         label.setJustificationType (juce::Justification::centred);
-        label.setFont (juce::FontOptions (11.0f, juce::Font::bold));
-        label.setColour (juce::Label::textColourId, juce::Colour (0xffaaaaaa));
+        label.setFont (juce::Font ("Avenir", 14.5f, juce::Font::bold));
+        label.setColour (juce::Label::textColourId, juce::Colour (0xffdddddd));
         addAndMakeVisible (label);
 
         slider.onValueChange = [this] { repaint(); };
@@ -29,10 +29,10 @@ public:
 
     juce::Slider& getSlider() { return slider; }
 
-    void paint (juce::Graphics& g) override
+    void paintOverChildren (juce::Graphics& g) override
     {
-        // Draw shape preview inside the knob area (between top and label)
-        auto knobArea = getLocalBounds().withTrimmedBottom (26); // leave room for label
+        // Draw shape preview ON TOP of the slider's dark circle
+        auto knobArea = getLocalBounds().withTrimmedBottom (26);
         auto centre = knobArea.getCentre().toFloat();
         float radius = juce::jmin (knobArea.getWidth(), knobArea.getHeight()) * 0.5f - 6.0f;
 

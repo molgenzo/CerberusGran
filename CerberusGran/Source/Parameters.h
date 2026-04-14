@@ -16,9 +16,6 @@ inline juce::AudioProcessorValueTreeState::ParameterLayout createParameterLayout
         "mix", "Mix",
         juce::NormalisableRange<float> (0.0f, 100.0f, 1.0f), 100.0f));
 
-    params.push_back (std::make_unique<juce::AudioParameterBool> (
-        "freeze", "Freeze", false));
-
     params.push_back (std::make_unique<juce::AudioParameterChoice> (
         "sourceMode", "Source",
         juce::StringArray { "Live", "File" }, 0));
@@ -36,6 +33,9 @@ inline juce::AudioProcessorValueTreeState::ParameterLayout createParameterLayout
 
         params.push_back (std::make_unique<juce::AudioParameterBool> (
             id ("enable"), nm ("Enable"), h == 0));
+
+        params.push_back (std::make_unique<juce::AudioParameterBool> (
+            id ("freeze"), nm ("Freeze"), false));
 
         // Scan
         params.push_back (std::make_unique<juce::AudioParameterFloat> (

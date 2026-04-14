@@ -16,32 +16,27 @@ public:
         }
     }
 
-    void paint (juce::Graphics& g) override
-    {
-        g.setColour (juce::Colour (0xffaaaaaa));
-        g.setFont (juce::FontOptions (13.0f, juce::Font::bold));
-        g.drawText ("FX CHAIN", 0, 0, getWidth(), 20, juce::Justification::centredLeft);
-    }
-
     void resized() override
     {
-        int y = 22;
-        for (auto* card : cards)
-        {
-            int h = card->getIdealHeight();
-            card->setBounds (0, y, getWidth(), h);
-            y += h + 2;
-        }
+        auto area = getLocalBounds();
+        int gap = 4;
+        int cols = 2, rows = 2;
+        int cardW = (area.getWidth() - gap * (cols - 1)) / cols;
+        int cardH = (area.getHeight() - gap * (rows - 1)) / rows;
 
-        setSize (getWidth(), getIdealHeight());
+        for (int r = 0; r < rows; ++r)
+            for (int c = 0; c < cols; ++c)
+            {
+                int idx = r * cols + c;
+                int x = area.getX() + c * (cardW + gap);
+                int y = area.getY() + r * (cardH + gap);
+                cards[idx]->setBounds (x, y, cardW, cardH);
+            }
     }
 
     int getIdealHeight() const
     {
-        int h = 22;
-        for (auto* card : cards)
-            h += card->getIdealHeight() + 2;
-        return h;
+        return getHeight();
     }
 
 private:
@@ -49,7 +44,6 @@ private:
 
     void updateAvailableEffects()
     {
-        // Collect which effects are used across all slots
         for (int i = 0; i < cards.size(); ++i)
         {
             std::set<FXType> usedByOthers;

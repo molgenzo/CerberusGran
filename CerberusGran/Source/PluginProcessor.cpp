@@ -13,7 +13,6 @@ CerberusGranAudioProcessor::CerberusGranAudioProcessor()
 
     masterGainParam = apvts.getRawParameterValue ("masterGain");
     mixParam        = apvts.getRawParameterValue ("mix");
-    freezeParam     = apvts.getRawParameterValue ("freeze");
     sourceModeParam = apvts.getRawParameterValue ("sourceMode");
 
     for (int h = 0; h < kNumHeads; ++h)
@@ -22,6 +21,7 @@ CerberusGranAudioProcessor::CerberusGranAudioProcessor()
         auto& hp = headParams[h];
 
         hp.enable   = apvts.getRawParameterValue (id ("enable"));
+        hp.freeze   = apvts.getRawParameterValue (id ("freeze"));
         hp.position = apvts.getRawParameterValue (id ("position"));
         hp.spread   = apvts.getRawParameterValue (id ("spread"));
         hp.rateMode     = apvts.getRawParameterValue (id ("rateMode"));
@@ -87,7 +87,13 @@ void CerberusGranAudioProcessor::updateParametersFromAPVTS()
 
     int sm = static_cast<int> (sourceModeParam->load());
     sourceMode.store (sm, std::memory_order_relaxed);
-    freeze.store (freezeParam->load() >= 0.5f, std::memory_order_relaxed);
+    // Freeze ring buffer if ANY head has freeze enabled
+    {
+        bool anyFreeze = false;
+        for (int h = 0; h < kNumHeads; ++h)
+            if (headParams[h].freeze->load() >= 0.5f) { anyFreeze = true; break; }
+        freeze.store (anyFreeze, std::memory_order_relaxed);
+    }
 
     float finestGridMs = 0.0f;
     bool anySync = false;

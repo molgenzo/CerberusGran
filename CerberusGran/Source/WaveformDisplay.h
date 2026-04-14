@@ -13,6 +13,8 @@ public:
     {
     }
 
+    void setActiveHead (int h) { activeHeadIndex = juce::jlimit (0, 4, h); }
+
     void updateLiveWaveform()
     {
         auto& rb = processor.getRingBuffer();
@@ -125,9 +127,14 @@ public:
             }
         }
 
-        // Head position markers
+        // Head position markers — draw active head last (on top)
+        // First pass: inactive heads. Second pass: active head.
+        for (int pass = 0; pass < 2; ++pass)
         for (int i = 0; i < 5; ++i)
         {
+            bool isActive = (i == activeHeadIndex);
+            if ((pass == 0 && isActive) || (pass == 1 && !isActive)) continue;
+
             auto* ep = processor.apvts.getRawParameterValue ("head" + juce::String (i) + "_enable");
             if (ep == nullptr || ep->load() < 0.5f) continue;
 
@@ -159,20 +166,34 @@ public:
 
             int x = inner.getX() + static_cast<int> ((pos / 100.0f) * inner.getWidth());
 
-            // Spread region (shaded area around position)
+            // Spread region
             if (spread > 0.1f)
             {
                 int spreadPx = static_cast<int> ((spread / 100.0f) * inner.getWidth());
-                g.setColour (headColours[i].withAlpha (0.12f));
-                g.fillRect (x - spreadPx, inner.getY(), spreadPx * 2, inner.getHeight());
-                // Spread edges
-                g.setColour (headColours[i].withAlpha (0.2f));
-                g.drawVerticalLine (x - spreadPx, static_cast<float> (inner.getY()), static_cast<float> (inner.getBottom()));
-                g.drawVerticalLine (x + spreadPx, static_cast<float> (inner.getY()), static_cast<float> (inner.getBottom()));
-            }
 
+                if (isActive)
+                {
+                    // Prominent bounding box for active head
+                    auto boxRect = juce::Rectangle<float> (
+                        static_cast<float> (x - spreadPx), static_cast<float> (inner.getY()),
+                        static_cast<float> (spreadPx * 2), static_cast<float> (inner.getHeight()));
+                    g.setColour (headColours[i].withAlpha (0.2f));
+                    g.fillRoundedRectangle (boxRect, 3.0f);
+                    g.setColour (headColours[i].withAlpha (0.6f));
+                    g.drawRoundedRectangle (boxRect.reduced (0.5f), 3.0f, 1.5f);
+                }
+                else
+                {
+                    g.setColour (headColours[i].withAlpha (0.08f));
+                    g.fillRect (x - spreadPx, inner.getY(), spreadPx * 2, inner.getHeight());
+                    g.setColour (headColours[i].withAlpha (0.15f));
+                    g.drawVerticalLine (x - spreadPx, static_cast<float> (inner.getY()), static_cast<float> (inner.getBottom()));
+                    g.drawVerticalLine (x + spreadPx, static_cast<float> (inner.getY()), static_cast<float> (inner.getBottom()));
+                }
+            }
             // Position line
-            g.setColour (headColours[i].withAlpha (0.7f));
+            float lineAlpha = isActive ? 0.9f : 0.5f;
+            g.setColour (headColours[i].withAlpha (lineAlpha));
             g.drawVerticalLine (x, static_cast<float> (inner.getY()), static_cast<float> (inner.getBottom()));
 
             // Triangle marker
@@ -253,6 +274,7 @@ private:
     juce::AudioThumbnail thumbnail;
     bool fileLoaded = false;
     bool dragOver = false;
+    int activeHeadIndex = 0;
 
     static constexpr int kWaveformPoints = 800;
     std::array<float, kWaveformPoints> liveWaveform {};

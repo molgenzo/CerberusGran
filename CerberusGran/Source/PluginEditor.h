@@ -28,5 +28,9 @@ private:
     juce::OwnedArray<EngineColumn> columns;
     GlobalBar globalBar;
 
+    int currentHeadIndex = 0;
+
+    void switchToHead (int headIndex);
+
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (CerberusGranAudioProcessorEditor)
 };

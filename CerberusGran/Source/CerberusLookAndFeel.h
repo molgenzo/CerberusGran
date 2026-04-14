@@ -6,11 +6,12 @@ class CerberusLookAndFeel : public juce::LookAndFeel_V4
 public:
     CerberusLookAndFeel()
     {
+        setDefaultSansSerifTypefaceName ("Avenir");
         setColour (juce::ResizableWindow::backgroundColourId, juce::Colour (0xff1A1A1E));
         setColour (juce::Label::textColourId, juce::Colour (0xffcccccc));
         setColour (juce::Slider::textBoxTextColourId, juce::Colour (0xffcccccc));
         setColour (juce::Slider::textBoxOutlineColourId, juce::Colours::transparentBlack);
-        setColour (juce::ComboBox::backgroundColourId, juce::Colours::transparentBlack);
+        setColour (juce::ComboBox::backgroundColourId, juce::Colour (0xff2A2A30));
         setColour (juce::ComboBox::textColourId, juce::Colour (0xffcccccc));
         setColour (juce::ComboBox::outlineColourId, juce::Colours::transparentBlack);
         setColour (juce::ComboBox::arrowColourId, juce::Colour (0xff666666));
@@ -19,39 +20,74 @@ public:
         setColour (juce::PopupMenu::highlightedBackgroundColourId, juce::Colour (0xff3A3A40));
     }
 
+    void drawButtonBackground (juce::Graphics& g, juce::Button& button,
+                               const juce::Colour& backgroundColour,
+                               bool shouldDrawButtonAsHighlighted, bool shouldDrawButtonAsDown) override
+    {
+        auto bounds = button.getLocalBounds().toFloat().reduced (0.5f);
+        float cornerSize = bounds.getHeight() * 0.45f;
+
+        auto baseColour = backgroundColour;
+        if (shouldDrawButtonAsDown)
+            baseColour = baseColour.brighter (0.15f);
+        else if (shouldDrawButtonAsHighlighted)
+            baseColour = baseColour.brighter (0.08f);
+
+        g.setColour (baseColour);
+        g.fillRoundedRectangle (bounds, cornerSize);
+    }
+
     void drawComboBox (juce::Graphics& g, int width, int height, bool,
                        int, int, int, int, juce::ComboBox& box) override
     {
         auto bounds = juce::Rectangle<int> (0, 0, width, height).toFloat();
+        float cornerSize = bounds.getHeight() * 0.45f;
 
         g.setColour (box.findColour (juce::ComboBox::backgroundColourId));
-        g.fillRoundedRectangle (bounds, 2.0f);
+        g.fillRoundedRectangle (bounds, cornerSize);
 
-        // Tiny arrow on the right
-        float arrowX = static_cast<float> (width) - 8.0f;
+        float arrowX = static_cast<float> (width) - 10.0f;
         float arrowY = static_cast<float> (height) * 0.5f;
         juce::Path arrow;
         arrow.addTriangle (arrowX - 3.0f, arrowY - 2.0f,
                            arrowX + 3.0f, arrowY - 2.0f,
                            arrowX, arrowY + 2.5f);
-        g.setColour (juce::Colour (0xff666666));
+        g.setColour (juce::Colour (0xff888888));
         g.fillPath (arrow);
     }
 
-    // Give the text almost all the width — only 10px for arrow
     void positionComboBoxText (juce::ComboBox& box, juce::Label& label) override
     {
-        label.setBounds (2, 0, box.getWidth() - 12, box.getHeight());
-        label.setFont (juce::FontOptions (12.0f));
+        label.setBounds (6, 0, box.getWidth() - 16, box.getHeight());
+        label.setFont (juce::Font ("Avenir", 12.0f, juce::Font::bold));
     }
 
-    // Make the arrow button area tiny so it doesn't eat text space
+    juce::Font getPopupMenuFont() override
+    {
+        return juce::Font ("Avenir", 13.0f, juce::Font::bold);
+    }
+
+    juce::Font getComboBoxFont (juce::ComboBox&) override
+    {
+        return juce::Font ("Avenir", 12.0f, juce::Font::bold);
+    }
+
+    juce::Font getTextButtonFont (juce::TextButton&, int) override
+    {
+        return juce::Font ("Avenir", 13.0f, juce::Font::bold);
+    }
+
+    juce::Font getLabelFont (juce::Label&) override
+    {
+        return juce::Font ("Avenir", 12.0f, juce::Font::bold);
+    }
+
     juce::Component* getComboBoxButton (juce::ComboBox&) { return nullptr; }
 
     juce::Label* createSliderTextBox (juce::Slider& slider) override
     {
         auto* label = juce::LookAndFeel_V4::createSliderTextBox (slider);
-        label->setFont (juce::FontOptions (10.0f));
+        label->setFont (juce::Font ("Avenir", 10.0f, juce::Font::bold));
         label->setColour (juce::Label::textColourId, juce::Colour (0xffaaaaaa));
         return label;
     }
@@ -65,11 +101,14 @@ public:
         float centreX = bounds.getCentreX();
         float centreY = bounds.getCentreY();
 
-        // Get accent colour from component property, fallback to white
         auto accentVar = slider.getProperties() ["accentColour"];
         juce::Colour accent = accentVar.isVoid()
             ? juce::Colour (0xff888888)
             : juce::Colour (static_cast<juce::uint32> ((juce::int64) accentVar));
+
+        // Dark filled circle background
+        g.setColour (juce::Colour (0xff1E1E24));
+        g.fillEllipse (centreX - radius, centreY - radius, radius * 2.0f, radius * 2.0f);
 
         // Outer circle outline
         g.setColour (juce::Colour (0xff3A3A40));
@@ -97,7 +136,6 @@ public:
 
         auto bounds = button.getLocalBounds().toFloat();
 
-        // Pill toggle
         float pillW = juce::jmin (40.0f, bounds.getWidth());
         float pillH = juce::jmin (20.0f, bounds.getHeight());
         float pillX = bounds.getCentreX() - pillW * 0.5f;
@@ -114,18 +152,16 @@ public:
         g.setColour (isOn ? accent : juce::Colour (0xff3A3A40));
         g.fillRoundedRectangle (pillX, pillY, pillW, pillH, pillRadius);
 
-        // Thumb circle
         float thumbR = pillH * 0.4f;
         float thumbX = isOn ? (pillX + pillW - pillH * 0.5f) : (pillX + pillH * 0.5f);
         g.setColour (juce::Colour (0xffeeeeee));
         g.fillEllipse (thumbX - thumbR, pillY + pillH * 0.5f - thumbR, thumbR * 2.0f, thumbR * 2.0f);
 
-        // Button text (if any) to the left
         auto text = button.getButtonText();
         if (text.isNotEmpty())
         {
             g.setColour (juce::Colour (0xffcccccc));
-            g.setFont (juce::FontOptions (12.0f));
+            g.setFont (juce::Font ("Avenir", 12.0f, juce::Font::plain));
             g.drawText (text, bounds.withRight (pillX - 4.0f), juce::Justification::centredRight);
         }
     }
@@ -134,22 +170,60 @@ public:
                            float sliderPos, float minSliderPos, float maxSliderPos,
                            juce::Slider::SliderStyle style, juce::Slider& slider) override
     {
-        juce::ignoreUnused (minSliderPos, maxSliderPos, style);
+        juce::ignoreUnused (minSliderPos, maxSliderPos);
 
-        auto bounds = juce::Rectangle<int> (x, y, width, height).toFloat();
+        if (style == juce::Slider::LinearVertical)
+        {
+            // Segmented vertical bar (mini level meter)
+            auto bounds = juce::Rectangle<int> (x, y, width, height).toFloat();
 
-        auto accentVar = slider.getProperties() ["accentColour"];
-        juce::Colour accent = accentVar.isVoid()
-            ? juce::Colour (0xff888888)
-            : juce::Colour (static_cast<juce::uint32> ((juce::int64) accentVar));
+            g.setColour (juce::Colour (0xff2A2A30));
+            g.fillRoundedRectangle (bounds, 2.0f);
 
-        // Track background — full height of the slider box
-        g.setColour (juce::Colour (0xff3A3A40));
-        g.fillRoundedRectangle (bounds, 3.0f);
+            int numSegs = 7;
+            float gap = 1.5f;
+            float segH = (bounds.getHeight() - gap * (numSegs - 1)) / numSegs;
 
-        // Filled portion — full height
-        float fillW = sliderPos - bounds.getX();
-        g.setColour (accent.withAlpha (0.6f));
-        g.fillRoundedRectangle (bounds.getX(), bounds.getY(), fillW, bounds.getHeight(), 3.0f);
+            for (int i = 0; i < numSegs; ++i)
+            {
+                // i=0 at bottom, i=numSegs-1 at top
+                float segBottom = bounds.getBottom() - i * (segH + gap);
+                float segTop = segBottom - segH;
+                float segCenterY = (segTop + segBottom) * 0.5f;
+
+                bool filled = segCenterY > sliderPos;
+
+                if (filled)
+                {
+                    // Gradient: brighter at top of fill
+                    float t = static_cast<float> (i) / static_cast<float> (numSegs - 1);
+                    g.setColour (juce::Colour (0xff888888).interpolatedWith (
+                        juce::Colour (0xffeeeeee), t));
+                }
+                else
+                {
+                    g.setColour (juce::Colour (0xff3A3A40));
+                }
+
+                g.fillRect (bounds.getX() + 1.5f, segTop, bounds.getWidth() - 3.0f, segH);
+            }
+        }
+        else
+        {
+            // Horizontal linear bar
+            auto bounds = juce::Rectangle<int> (x, y, width, height).toFloat();
+
+            auto accentVar = slider.getProperties() ["accentColour"];
+            juce::Colour accent = accentVar.isVoid()
+                ? juce::Colour (0xff888888)
+                : juce::Colour (static_cast<juce::uint32> ((juce::int64) accentVar));
+
+            g.setColour (juce::Colour (0xff3A3A40));
+            g.fillRoundedRectangle (bounds, 3.0f);
+
+            float fillW = sliderPos - bounds.getX();
+            g.setColour (accent.withAlpha (0.6f));
+            g.fillRoundedRectangle (bounds.getX(), bounds.getY(), fillW, bounds.getHeight(), 3.0f);
+        }
     }
 };

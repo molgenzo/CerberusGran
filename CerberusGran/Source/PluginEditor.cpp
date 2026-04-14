@@ -4,7 +4,7 @@ CerberusGranAudioProcessorEditor::CerberusGranAudioProcessorEditor (CerberusGran
     : juce::AudioProcessorEditor (&p),
       audioProcessor (p),
       waveformDisplay (p, headColours),
-      globalBar (p.apvts)
+      globalBar (p.apvts, headColours)
 {
     setLookAndFeel (&cerberusLnf);
 
@@ -23,11 +23,16 @@ CerberusGranAudioProcessorEditor::CerberusGranAudioProcessorEditor (CerberusGran
         auto* col = new EngineColumn (p.apvts, i, headColours[i]);
         columns.add (col);
         addAndMakeVisible (col);
+        col->setVisible (i == 0); // only show head 0 initially
     }
 
     addAndMakeVisible (globalBar);
 
-    setSize (1500, 900);
+    // Wire head navigation from GlobalBar
+    globalBar.onHeadChanged = [this] (int newHead) { switchToHead (newHead); };
+
+    // Tight sizing: topBar(48) + waveform(80) + labels(24) + fxPanel(2*118+4=240) + padding(24) = 416
+    setSize (620, 416);
     startTimerHz (30);
 }
 
@@ -47,19 +52,15 @@ void CerberusGranAudioProcessorEditor::resized()
     auto area = getLocalBounds();
 
     // Global bar at top
-    globalBar.setBounds (area.removeFromTop (40));
+    globalBar.setBounds (area.removeFromTop (48));
 
     // Waveform below global bar
-    waveformDisplay.setBounds (area.removeFromTop (130).reduced (8, 4));
+    waveformDisplay.setBounds (area.removeFromTop (80).reduced (8, 4));
 
-    // 5 engine columns fill the middle
-    auto columnsArea = area.reduced (4, 4);
-    int colW = columnsArea.getWidth() / kNumCols;
-
+    // Single engine column fills remaining space
+    auto columnArea = area.reduced (2, 2);
     for (int i = 0; i < kNumCols; ++i)
-    {
-        columns[i]->setBounds (columnsArea.removeFromLeft (colW).reduced (2));
-    }
+        columns[i]->setBounds (columnArea);
 }
 
 void CerberusGranAudioProcessorEditor::timerCallback()
@@ -68,4 +69,15 @@ void CerberusGranAudioProcessorEditor::timerCallback()
         waveformDisplay.updateLiveWaveform();
 
     waveformDisplay.repaint();
+}
+
+void CerberusGranAudioProcessorEditor::switchToHead (int headIndex)
+{
+    headIndex = juce::jlimit (0, kNumCols - 1, headIndex);
+    if (headIndex == currentHeadIndex) return;
+
+    columns[currentHeadIndex]->setVisible (false);
+    currentHeadIndex = headIndex;
+    columns[currentHeadIndex]->setVisible (true);
+    waveformDisplay.setActiveHead (headIndex);
 }

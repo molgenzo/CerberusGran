@@ -74,12 +74,12 @@ private:
     // Cached param pointers
     std::atomic<float>* masterGainParam = nullptr;
     std::atomic<float>* mixParam = nullptr;
-    std::atomic<float>* freezeParam = nullptr;
     std::atomic<float>* sourceModeParam = nullptr;
 
     struct HeadParamPtrs
     {
         std::atomic<float>* enable = nullptr;
+        std::atomic<float>* freeze = nullptr;
         std::atomic<float>* position = nullptr;
         std::atomic<float>* spread = nullptr;
         std::atomic<float>* rateMode = nullptr;

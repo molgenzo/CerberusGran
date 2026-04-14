@@ -14,17 +14,17 @@ public:
             slider.setTextValueSuffix (suffix);
         addAndMakeVisible (slider);
 
-        // Name label — below knob, bigger
+        // Name label — bright white, larger
         label.setText (labelText, juce::dontSendNotification);
         label.setJustificationType (juce::Justification::centred);
-        label.setFont (juce::FontOptions (11.0f, juce::Font::bold));
-        label.setColour (juce::Label::textColourId, juce::Colour (0xffaaaaaa));
+        label.setFont (juce::Font ("Avenir", 14.5f, juce::Font::bold));
+        label.setColour (juce::Label::textColourId, juce::Colour (0xffdddddd));
         addAndMakeVisible (label);
 
-        // Value readout — below name, smaller
+        // Value readout — dimmer
         valueLabel.setJustificationType (juce::Justification::centred);
-        valueLabel.setFont (juce::FontOptions (9.0f));
-        valueLabel.setColour (juce::Label::textColourId, juce::Colour (0xff666666));
+        valueLabel.setFont (juce::Font ("Avenir", 9.0f, juce::Font::bold));
+        valueLabel.setColour (juce::Label::textColourId, juce::Colour (0xff999999));
         addAndMakeVisible (valueLabel);
 
         slider.onValueChange = [this]
@@ -52,10 +52,14 @@ public:
     {
         auto area = getLocalBounds();
         valueLabel.setBounds (area.removeFromBottom (12));
-        label.setBounds (area.removeFromBottom (14));
-        slider.setBounds (area);
+        label.setBounds (area.removeFromBottom (16));
+        // Trim bottom of slider area so knob circle sits close to the label
+        area.removeFromBottom (-2);
+        // Make slider area square so the knob circle doesn't stretch
+        int side = juce::jmin (area.getWidth(), area.getHeight());
+        auto sliderArea = area.withSizeKeepingCentre (side, side);
+        slider.setBounds (sliderArea);
 
-        // Update value text
         if (slider.onValueChange)
             slider.onValueChange();
     }
