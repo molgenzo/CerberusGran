@@ -10,13 +10,43 @@ public:
         setColour (juce::Label::textColourId, juce::Colour (0xffcccccc));
         setColour (juce::Slider::textBoxTextColourId, juce::Colour (0xffcccccc));
         setColour (juce::Slider::textBoxOutlineColourId, juce::Colours::transparentBlack);
-        setColour (juce::ComboBox::backgroundColourId, juce::Colour (0xff2A2A30));
+        setColour (juce::ComboBox::backgroundColourId, juce::Colours::transparentBlack);
         setColour (juce::ComboBox::textColourId, juce::Colour (0xffcccccc));
-        setColour (juce::ComboBox::outlineColourId, juce::Colour (0xff3A3A40));
+        setColour (juce::ComboBox::outlineColourId, juce::Colours::transparentBlack);
+        setColour (juce::ComboBox::arrowColourId, juce::Colour (0xff666666));
         setColour (juce::PopupMenu::backgroundColourId, juce::Colour (0xff2A2A30));
         setColour (juce::PopupMenu::textColourId, juce::Colour (0xffcccccc));
         setColour (juce::PopupMenu::highlightedBackgroundColourId, juce::Colour (0xff3A3A40));
     }
+
+    void drawComboBox (juce::Graphics& g, int width, int height, bool,
+                       int, int, int, int, juce::ComboBox& box) override
+    {
+        auto bounds = juce::Rectangle<int> (0, 0, width, height).toFloat();
+
+        g.setColour (box.findColour (juce::ComboBox::backgroundColourId));
+        g.fillRoundedRectangle (bounds, 2.0f);
+
+        // Tiny arrow on the right
+        float arrowX = static_cast<float> (width) - 8.0f;
+        float arrowY = static_cast<float> (height) * 0.5f;
+        juce::Path arrow;
+        arrow.addTriangle (arrowX - 3.0f, arrowY - 2.0f,
+                           arrowX + 3.0f, arrowY - 2.0f,
+                           arrowX, arrowY + 2.5f);
+        g.setColour (juce::Colour (0xff666666));
+        g.fillPath (arrow);
+    }
+
+    // Give the text almost all the width — only 10px for arrow
+    void positionComboBoxText (juce::ComboBox& box, juce::Label& label) override
+    {
+        label.setBounds (2, 0, box.getWidth() - 12, box.getHeight());
+        label.setFont (juce::FontOptions (12.0f));
+    }
+
+    // Make the arrow button area tiny so it doesn't eat text space
+    juce::Component* getComboBoxButton (juce::ComboBox&) { return nullptr; }
 
     juce::Label* createSliderTextBox (juce::Slider& slider) override
     {

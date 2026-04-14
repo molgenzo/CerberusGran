@@ -4,6 +4,34 @@
 #include "GrainShapeKnob.h"
 #include "FXChainPanel.h"
 
+// Chain link icon button — draws two interlocking links
+class ChainLinkButton : public juce::ToggleButton
+{
+public:
+    juce::Colour accentColour { 0xff8B5CF6 };
+
+    void paintButton (juce::Graphics& g, bool highlighted, bool down) override
+    {
+        juce::ignoreUnused (highlighted, down);
+
+        auto b = getLocalBounds().toFloat().reduced (2.0f);
+        float cx = b.getCentreX();
+        float cy = b.getCentreY();
+        float r = juce::jmin (b.getWidth(), b.getHeight()) * 0.35f;
+
+        juce::Colour col = getToggleState() ? accentColour : juce::Colour (0xff555555);
+        g.setColour (col);
+
+        // Two overlapping rounded rects to form a chain link
+        float linkW = r * 1.6f;
+        float linkH = r * 0.8f;
+        float offset = r * 0.4f;
+
+        g.drawRoundedRectangle (cx - linkW * 0.5f - offset, cy - linkH * 0.5f, linkW, linkH, linkH * 0.4f, 1.5f);
+        g.drawRoundedRectangle (cx - linkW * 0.5f + offset, cy - linkH * 0.5f, linkW, linkH, linkH * 0.4f, 1.5f);
+    }
+};
+
 class EngineColumn : public juce::Component
 {
 public:
@@ -14,12 +42,10 @@ public:
         auto id = [headIndex] (const juce::String& name)
         { return "head" + juce::String (headIndex) + "_" + name; };
 
-        // Enable toggle
         enableBtn.getProperties().set ("accentColour", (juce::int64) accent.getARGB());
         addAndMakeVisible (enableBtn);
         enableAttach = std::make_unique<ButtonAttach> (apvts, id ("enable"), enableBtn);
 
-        // Knobs
         auto makeKnob = [&] (const juce::String& label, const juce::String& suffix,
                              const juce::String& paramName) -> RotaryKnob*
         {
@@ -38,81 +64,90 @@ public:
         gainKnob    = makeKnob ("Gain",    "dB", "gain");
         reverseKnob = makeKnob ("Reverse", "%",  "reverse");
 
-        // Sync division knob (stepped rotary — maps to Choice param)
+        // Sync division knob
         syncDivKnob = new RotaryKnob ("Div", "");
         syncDivKnob->setAccentColour (accent);
         syncDivKnob->getSlider().setRange (0, 8, 1);
         syncDivKnob->getSlider().textFromValueFunction = [] (double v)
         {
             static const char* labels[] = { "1/1", "1/2", "1/4", "1/8", "1/16", "1/32", "1/64", "1/128", "1/256" };
-            int i = juce::jlimit (0, 8, static_cast<int> (v));
-            return juce::String (labels[i]);
+            return juce::String (labels[juce::jlimit (0, 8, static_cast<int> (v))]);
         };
         syncDivKnob->getSlider().updateText();
         syncDivKnob->setVisible (false);
         addAndMakeVisible (syncDivKnob);
         syncDivAttach = std::make_unique<SliderAttach> (apvts, id ("rateSyncDiv"), syncDivKnob->getSlider());
 
-        // Rate mode toggle (Time / Sync)
-        rateModeBox.addItemList ({ "Time", "Sync" }, 1);
-        rateModeBox.setColour (juce::ComboBox::backgroundColourId, juce::Colour (0xff2A2A30));
-        rateModeBox.setColour (juce::ComboBox::outlineColourId, juce::Colour (0xff3A3A40));
-        rateModeBox.onChange = [this] { updateRateModeVisibility(); };
-        addAndMakeVisible (rateModeBox);
-        rateModeAttach = std::make_unique<ComboAttach> (apvts, id ("rateMode"), rateModeBox);
+        // Sync toggle button (replaces dropdown)
+        syncBtn.setButtonText ("Sync");
+        syncBtn.setClickingTogglesState (true);
+        syncBtn.setColour (juce::TextButton::buttonColourId, juce::Colours::transparentBlack);
+        syncBtn.setColour (juce::TextButton::buttonOnColourId, juce::Colours::transparentBlack);
+        syncBtn.setColour (juce::TextButton::textColourOffId, juce::Colour (0xff555555));
+        syncBtn.setColour (juce::TextButton::textColourOnId, accent);
+        syncBtn.onClick = [this, &apvts, id]
+        {
+            bool on = syncBtn.getToggleState();
+            if (auto* p = apvts.getParameter (id ("rateMode")))
+                p->setValueNotifyingHost (on ? 1.0f : 0.0f);
+            updateRateModeVisibility();
+        };
+        addAndMakeVisible (syncBtn);
 
-        // Sync type selector (Normal / Triplet / Dotted) — side by side
+        // Read initial state
+        if (auto* p = apvts.getRawParameterValue (id ("rateMode")))
+            syncBtn.setToggleState (p->load() >= 0.5f, juce::dontSendNotification);
+
+        // Sync type (Norm / Trip / Dot) — only visible when sync is on
         syncTypeBox.addItemList ({ "Norm", "Trip", "Dot" }, 1);
-        syncTypeBox.setColour (juce::ComboBox::backgroundColourId, juce::Colour (0xff2A2A30));
-        syncTypeBox.setColour (juce::ComboBox::outlineColourId, juce::Colour (0xff3A3A40));
-        syncTypeBox.setVisible (false);
+        syncTypeBox.setColour (juce::ComboBox::backgroundColourId, juce::Colours::transparentBlack);
+        syncTypeBox.setEnabled (false);
+        syncTypeBox.setAlpha (0.3f);
         addAndMakeVisible (syncTypeBox);
         syncTypeAttach = std::make_unique<ComboAttach> (apvts, id ("rateSyncType"), syncTypeBox);
 
-        // Chainlink toggle (links Size to Rate as a ratio)
+        // Link text button
         sizeLinkBtn.setButtonText ("Link");
         sizeLinkBtn.setClickingTogglesState (true);
-        sizeLinkBtn.setColour (juce::TextButton::buttonColourId, juce::Colour (0xff2A2A30));
-        sizeLinkBtn.setColour (juce::TextButton::buttonOnColourId, accent.withAlpha (0.6f));
-        sizeLinkBtn.setColour (juce::TextButton::textColourOffId, juce::Colour (0xff888888));
-        sizeLinkBtn.setColour (juce::TextButton::textColourOnId, juce::Colour (0xffeeeeee));
+        sizeLinkBtn.setColour (juce::TextButton::buttonColourId, juce::Colours::transparentBlack);
+        sizeLinkBtn.setColour (juce::TextButton::buttonOnColourId, juce::Colours::transparentBlack);
+        sizeLinkBtn.setColour (juce::TextButton::textColourOffId, juce::Colour (0xff555555));
+        sizeLinkBtn.setColour (juce::TextButton::textColourOnId, accent);
         sizeLinkBtn.onClick = [this] { updateSizeLinkVisibility(); };
         addAndMakeVisible (sizeLinkBtn);
         sizeLinkAttach = std::make_unique<ButtonAttach> (apvts, id ("sizeLink"), sizeLinkBtn);
 
-        // Size ratio knob (stepped rotary, visible when linked)
+        // Size ratio knob
         sizeRatioKnob = new RotaryKnob ("Ratio", "");
         sizeRatioKnob->setAccentColour (accent);
         sizeRatioKnob->getSlider().setRange (0, 6, 1);
         sizeRatioKnob->getSlider().textFromValueFunction = [] (double v)
         {
             static const char* labels[] = { "1:4", "1:2", "1:1", "2:1", "4:1", "8:1", "16:1" };
-            int i = juce::jlimit (0, 6, static_cast<int> (v));
-            return juce::String (labels[i]);
+            return juce::String (labels[juce::jlimit (0, 6, static_cast<int> (v))]);
         };
         sizeRatioKnob->getSlider().updateText();
         sizeRatioKnob->setVisible (false);
         addAndMakeVisible (sizeRatioKnob);
         sizeRatioAttach = std::make_unique<SliderAttach> (apvts, id ("sizeRatio"), sizeRatioKnob->getSlider());
 
-        // Grain shape knob (continuous morph)
+        // Grain shape knob
         shapeKnob.setAccentColour (accent);
         addAndMakeVisible (shapeKnob);
         shapeAttach = std::make_unique<SliderAttach> (apvts, id ("shape"), shapeKnob.getSlider());
 
-        // FX panel in viewport for scrolling
+        // FX panel
         fxViewport.setViewedComponent (&fxPanel, false);
         fxViewport.setScrollBarsShown (true, false);
         addAndMakeVisible (fxViewport);
 
-        // Listen for enable to dim
+        // Dim when disabled
         enableAttachmentCb = std::make_unique<juce::ParameterAttachment> (
             *apvts.getParameter (id ("enable")),
             [this] (float v) { setAlpha (v >= 0.5f ? 1.0f : 0.35f); repaint(); },
             nullptr);
         enableAttachmentCb->sendInitialUpdate();
 
-        // Initial visibility
         updateRateModeVisibility();
         updateSizeLinkVisibility();
     }
@@ -125,14 +160,12 @@ public:
         g.setColour (accentColour.withAlpha (0.3f));
         g.drawRoundedRectangle (b.reduced (0.5f), 6.0f, 0.5f);
 
-        // Badge circle with number
         g.setColour (accentColour);
         g.fillEllipse (8.0f, 8.0f, 22.0f, 22.0f);
         g.setColour (juce::Colour (0xff1A1A1E));
         g.setFont (juce::FontOptions (12.0f, juce::Font::bold));
         g.drawText (juce::String (index + 1), 8, 8, 22, 22, juce::Justification::centred);
 
-        // "GRAIN" label
         g.setColour (juce::Colour (0xff888888));
         g.setFont (juce::FontOptions (10.0f, juce::Font::bold));
         g.drawText ("GRAIN", 6, 36, getWidth() - 12, 14, juce::Justification::centredLeft);
@@ -140,72 +173,78 @@ public:
 
     void resized() override
     {
-        auto area = getLocalBounds().reduced (6);
+        auto area = getLocalBounds().reduced (8);
+        int halfW = area.getWidth() / 2;
+        int knobH = 78;
+        int pad = 10; // vertical padding between rows
 
-        // Badge row
+        // Badge + enable
         auto badgeRow = area.removeFromTop (30);
         enableBtn.setBounds (badgeRow.removeFromRight (44).withHeight (22).withY (badgeRow.getY() + 4));
+        area.removeFromTop (16); // GRAIN label
 
-        area.removeFromTop (22); // "GRAIN" label space
+        // Helper: place two components in a row, each in its half with equal inset
+        int inset = 10;
+        auto placeRow = [&] (juce::Component* left, juce::Component* right)
+        {
+            auto row = area.removeFromTop (knobH);
+            auto leftArea = juce::Rectangle<int> (row.getX() + inset, row.getY(), halfW - inset * 2, knobH);
+            auto rightArea = juce::Rectangle<int> (row.getX() + halfW + inset, row.getY(), halfW - inset * 2, knobH);
+            if (left)  left->setBounds (leftArea);
+            if (right) right->setBounds (rightArea);
+            area.removeFromTop (pad);
+        };
 
-        int knobH = 80;
-        int fullW = area.getWidth();
-        int halfW = fullW / 2;
+        // Row 1: Pos | Spread
+        placeRow (posKnob, spreadKnob);
 
-        // Row 1: Pos, Spread
-        auto row1 = area.removeFromTop (knobH);
-        posKnob->setBounds (row1.removeFromLeft (halfW));
-        spreadKnob->setBounds (row1);
-
-        // Rate mode selector row (both selectors on left half only)
+        // Sync + note type on LEFT half, Link on RIGHT half — same row
+        bool isSync = syncBtn.getToggleState();
         auto modeRow = area.removeFromTop (20);
-        bool isSync = (rateModeBox.getSelectedId() == 2);
         auto modeLeft = modeRow.removeFromLeft (halfW);
         int modeHalf = modeLeft.getWidth() / 2;
-        rateModeBox.setBounds (modeLeft.removeFromLeft (modeHalf).reduced (2, 0));
-        if (isSync)
-            syncTypeBox.setBounds (modeLeft.reduced (2, 0));
+        syncBtn.setBounds (modeLeft.removeFromLeft (modeHalf).reduced (4, 0));
+        syncTypeBox.setBounds (modeLeft.reduced (4, 0));
+        // Link on the right half, centered
+        sizeLinkBtn.setBounds (juce::Rectangle<int> (modeRow.getX() + inset, modeRow.getY(), halfW - inset * 2, 20));
+        area.removeFromTop (2);
 
-        // Row 2: Rate knob (or sync div knob) | Link | Len knob (or ratio knob)
-        auto row2 = area.removeFromTop (knobH);
+        // Row 2: Rate (or Div) | Len (or Ratio) — same centering as all rows
+        {
+            auto row = area.removeFromTop (knobH);
+            auto leftArea = juce::Rectangle<int> (row.getX() + inset, row.getY(), halfW - inset * 2, knobH);
+            auto rightArea = juce::Rectangle<int> (row.getX() + halfW + inset, row.getY(), halfW - inset * 2, knobH);
 
-        // Rate side (left)
-        auto rateSide = row2.removeFromLeft (halfW - 16);
-        if (isSync)
-            syncDivKnob->setBounds (rateSide);
-        else
-            rateKnob->setBounds (rateSide);
+            if (isSync)
+                syncDivKnob->setBounds (leftArea);
+            else
+                rateKnob->setBounds (leftArea);
 
-        // Link button (narrow, between rate and len)
-        auto linkArea = row2.removeFromLeft (32);
-        sizeLinkBtn.setBounds (linkArea.withHeight (20).withY (linkArea.getCentreY() - 10));
+            if (sizeLinkBtn.getToggleState())
+                sizeRatioKnob->setBounds (rightArea);
+            else
+                lenKnob->setBounds (rightArea);
 
-        // Length side (right)
-        auto lenSide = row2;
-        if (sizeLinkBtn.getToggleState())
-            sizeRatioKnob->setBounds (lenSide);
-        else
-            lenKnob->setBounds (lenSide);
+            area.removeFromTop (pad);
+        }
 
-        // Row 3: Pitch, Gain
-        auto row3 = area.removeFromTop (knobH);
-        pitchKnob->setBounds (row3.removeFromLeft (halfW));
-        gainKnob->setBounds (row3);
+        // Row 3: Pitch | Shape — same centering
+        {
+            auto row = area.removeFromTop (knobH);
+            auto leftArea = juce::Rectangle<int> (row.getX() + inset, row.getY(), halfW - inset * 2, knobH);
+            auto rightArea = juce::Rectangle<int> (row.getX() + halfW + inset, row.getY(), halfW - inset * 2, knobH);
+            pitchKnob->setBounds (leftArea);
+            shapeKnob.setBounds (rightArea);
+            area.removeFromTop (pad);
+        }
 
-        // Row 4: Reverse
-        auto row4 = area.removeFromTop (knobH);
-        reverseKnob->setBounds (row4.removeFromLeft (halfW));
-
-        // Spacing before grain shape
-        area.removeFromTop (8);
-
-        // Grain shape knob
-        shapeKnob.setBounds (area.removeFromTop (80));
+        // Row 4: Gain | Reverse
+        placeRow (gainKnob, reverseKnob);
 
         // Spacing before FX chain
-        area.removeFromTop (10);
+        area.removeFromTop (6);
 
-        // FX chain panel fills remaining space
+        // FX chain
         fxViewport.setBounds (area);
         fxPanel.setSize (area.getWidth() - 10, fxPanel.getIdealHeight());
     }
@@ -224,37 +263,33 @@ private:
     RotaryKnob* gainKnob = nullptr;
     RotaryKnob* reverseKnob = nullptr;
     RotaryKnob* syncDivKnob = nullptr;
+    RotaryKnob* sizeRatioKnob = nullptr;
 
     GrainShapeKnob shapeKnob;
     FXChainPanel fxPanel;
     juce::Viewport fxViewport;
 
-    // Rate sync controls
-    juce::ComboBox rateModeBox, syncTypeBox;
-
-    // Chainlink controls
+    juce::TextButton syncBtn;
+    juce::ComboBox syncTypeBox;
     juce::TextButton sizeLinkBtn;
-    RotaryKnob* sizeRatioKnob = nullptr;
 
     using SliderAttach = juce::AudioProcessorValueTreeState::SliderAttachment;
     using ButtonAttach = juce::AudioProcessorValueTreeState::ButtonAttachment;
     using ComboAttach  = juce::AudioProcessorValueTreeState::ComboBoxAttachment;
 
-    std::unique_ptr<ButtonAttach> enableAttach;
-    std::unique_ptr<SliderAttach> shapeAttach;
-    std::unique_ptr<SliderAttach> syncDivAttach;
-    std::unique_ptr<SliderAttach> sizeRatioAttach;
-    std::unique_ptr<ComboAttach> rateModeAttach, syncTypeAttach;
-    std::unique_ptr<ButtonAttach> sizeLinkAttach;
+    std::unique_ptr<ButtonAttach> enableAttach, sizeLinkAttach;
+    std::unique_ptr<SliderAttach> shapeAttach, syncDivAttach, sizeRatioAttach;
+    std::unique_ptr<ComboAttach> syncTypeAttach;
     juce::OwnedArray<SliderAttach> knobAttachments;
     std::unique_ptr<juce::ParameterAttachment> enableAttachmentCb;
 
     void updateRateModeVisibility()
     {
-        bool isSync = (rateModeBox.getSelectedId() == 2);
+        bool isSync = syncBtn.getToggleState();
         rateKnob->setVisible (!isSync);
         syncDivKnob->setVisible (isSync);
-        syncTypeBox.setVisible (isSync);
+        syncTypeBox.setEnabled (isSync);
+        syncTypeBox.setAlpha (isSync ? 1.0f : 0.3f);
         resized();
     }
 

@@ -2,7 +2,6 @@
 #include <JuceHeader.h>
 #include "WindowFunctions.h"
 
-// A rotary knob that draws the interpolated grain window shape inside the circle
 class GrainShapeKnob : public juce::Component
 {
 public:
@@ -13,7 +12,7 @@ public:
         slider.setScrollWheelEnabled (false);
         addAndMakeVisible (slider);
 
-        label.setText ("Grain Shape", juce::dontSendNotification);
+        label.setText ("Shape", juce::dontSendNotification);
         label.setJustificationType (juce::Justification::centred);
         label.setFont (juce::FontOptions (11.0f, juce::Font::bold));
         label.setColour (juce::Label::textColourId, juce::Colour (0xffaaaaaa));
@@ -32,14 +31,13 @@ public:
 
     void paint (juce::Graphics& g) override
     {
-        // Draw the shape preview inside the knob area
-        auto knobArea = getLocalBounds().withTrimmedBottom (18);
+        // Draw shape preview inside the knob area (between top and label)
+        auto knobArea = getLocalBounds().withTrimmedBottom (26); // leave room for label
         auto centre = knobArea.getCentre().toFloat();
         float radius = juce::jmin (knobArea.getWidth(), knobArea.getHeight()) * 0.5f - 6.0f;
 
-        // Shape preview area (inside the knob circle)
-        float previewW = radius * 1.2f;
-        float previewH = radius * 0.7f;
+        float previewW = radius * 0.9f;
+        float previewH = radius * 0.5f;
         float previewX = centre.x - previewW * 0.5f;
         float previewY = centre.y - previewH * 0.5f;
 
@@ -55,10 +53,8 @@ public:
             float x = previewX + phase * previewW;
             float y = previewY + previewH * (1.0f - val);
 
-            if (i == 0)
-                shapePath.startNewSubPath (x, y);
-            else
-                shapePath.lineTo (x, y);
+            if (i == 0) shapePath.startNewSubPath (x, y);
+            else shapePath.lineTo (x, y);
         }
 
         g.setColour (juce::Colour (0xffcccccc));
@@ -68,7 +64,9 @@ public:
     void resized() override
     {
         auto area = getLocalBounds();
-        label.setBounds (area.removeFromBottom (18));
+        // Same layout as RotaryKnob: knob on top, label below (no value readout)
+        area.removeFromBottom (12); // match the valueLabel space in RotaryKnob
+        label.setBounds (area.removeFromBottom (14));
         slider.setBounds (area);
     }
 

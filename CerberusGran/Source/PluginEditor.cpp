@@ -27,7 +27,7 @@ CerberusGranAudioProcessorEditor::CerberusGranAudioProcessorEditor (CerberusGran
 
     addAndMakeVisible (globalBar);
 
-    setSize (1300, 850);
+    setSize (1500, 900);
     startTimerHz (30);
 }
 

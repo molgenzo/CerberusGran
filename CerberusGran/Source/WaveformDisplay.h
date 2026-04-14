@@ -94,33 +94,32 @@ public:
             g.fillRoundedRectangle (bounds, 6.0f);
         }
 
-        // Sync grid lines
+        // Sync grid lines — evenly spaced across the entire waveform display
         if (processor.anySyncActive.load (std::memory_order_relaxed))
         {
             float gridMs = processor.syncGridMs.load (std::memory_order_relaxed);
             if (gridMs > 0.0f)
             {
-                // Grid spacing as fraction of the buffer
-                float bufferMs;
-                if (isLive)
-                    bufferMs = static_cast<float> (processor.getRingBuffer().getBufferSize())
-                             / static_cast<float> (processor.getCurrentSampleRate()) * 1000.0f;
-                else
-                    bufferMs = static_cast<float> (thumbnail.getTotalLength()) * 1000.0f;
+                float sr = static_cast<float> (processor.getCurrentSampleRate());
+                float bufferSamples = isLive
+                    ? static_cast<float> (processor.getRingBuffer().getBufferSize())
+                    : (thumbnail.getTotalLength() > 0 ? static_cast<float> (thumbnail.getTotalLength()) * sr : 1.0f);
 
-                if (bufferMs > 0.0f)
+                float gridSamples = gridMs * 0.001f * sr;
+                if (gridSamples > 0.0f && bufferSamples > 0.0f)
                 {
-                    float gridFraction = gridMs / bufferMs;
-                    int numLines = static_cast<int> (1.0f / gridFraction);
-                    numLines = juce::jmin (numLines, 200); // cap to avoid drawing thousands
+                    float pixelsPerGrid = (gridSamples / bufferSamples) * static_cast<float> (inner.getWidth());
 
-                    g.setColour (juce::Colour (0xffffffff).withAlpha (0.06f));
-                    for (int i = 1; i < numLines; ++i)
+                    // Only draw if lines won't be too dense (min 1px apart)
+                    if (pixelsPerGrid >= 1.0f)
                     {
-                        float xNorm = i * gridFraction;
-                        int x = inner.getX() + static_cast<int> (xNorm * inner.getWidth());
-                        g.drawVerticalLine (x, static_cast<float> (inner.getY()),
-                                           static_cast<float> (inner.getBottom()));
+                        g.setColour (juce::Colour (0xffffffff).withAlpha (0.07f));
+                        for (float px = pixelsPerGrid; px < static_cast<float> (inner.getWidth()); px += pixelsPerGrid)
+                        {
+                            int x = inner.getX() + static_cast<int> (px);
+                            g.drawVerticalLine (x, static_cast<float> (inner.getY()),
+                                               static_cast<float> (inner.getBottom()));
+                        }
                     }
                 }
             }
@@ -134,6 +133,30 @@ public:
 
             float pos = *processor.apvts.getRawParameterValue ("head" + juce::String (i) + "_position");
             float spread = *processor.apvts.getRawParameterValue ("head" + juce::String (i) + "_spread");
+
+            // Snap position to grid when this head is in sync mode
+            int rateMode = static_cast<int> (*processor.apvts.getRawParameterValue ("head" + juce::String (i) + "_rateMode"));
+            if (rateMode == 1) // Sync
+            {
+                float gridMs = processor.syncGridMs.load (std::memory_order_relaxed);
+                if (gridMs > 0.0f)
+                {
+                    float bufferMs;
+                    if (isLive)
+                        bufferMs = static_cast<float> (processor.getRingBuffer().getBufferSize())
+                                 / static_cast<float> (processor.getCurrentSampleRate()) * 1000.0f;
+                    else
+                        bufferMs = static_cast<float> (thumbnail.getTotalLength()) * 1000.0f;
+
+                    if (bufferMs > 0.0f)
+                    {
+                        float gridPct = (gridMs / bufferMs) * 100.0f;
+                        if (gridPct > 0.01f)
+                            pos = std::round (pos / gridPct) * gridPct;
+                    }
+                }
+            }
+
             int x = inner.getX() + static_cast<int> ((pos / 100.0f) * inner.getWidth());
 
             // Spread region (shaded area around position)

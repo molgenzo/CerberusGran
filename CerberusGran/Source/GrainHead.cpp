@@ -19,19 +19,32 @@ void GrainHead::spawnGrain (const RingBuffer& ringBuffer,
 
     float pos;
 
-    if (syncGrid && syncGridMs > 0.0f && spread > 0.0f)
+    if (syncGrid && syncGridMs > 0.0f)
     {
-        // In sync mode: spread snaps grains to nearby grid lines
         // Grid spacing as percentage of buffer
-        float gridPct = (syncGridMs * 0.001f * static_cast<float> (sampleRate))
-                      / (liveMode ? static_cast<float> (ringBuffer.getBufferSize())
-                                  : (sampleBuffer ? static_cast<float> (sampleBuffer->getNumSamples()) : 1.0f))
-                      * 100.0f;
+        float bufSamples = liveMode ? static_cast<float> (ringBuffer.getBufferSize())
+                                    : (sampleBuffer ? static_cast<float> (sampleBuffer->getNumSamples()) : 1.0f);
+        float gridPct = (syncGridMs * 0.001f * static_cast<float> (sampleRate)) / bufSamples * 100.0f;
 
-        // How many grid steps to spread across (based on spread %)
-        int maxSteps = juce::jmax (1, static_cast<int> (spread / gridPct));
-        int step = rng.nextInt (maxSteps * 2 + 1) - maxSteps; // random grid step offset
-        pos = juce::jlimit (0.0f, 100.0f, position + step * gridPct) / 100.0f;
+        if (gridPct > 0.01f)
+        {
+            // Snap base position to nearest grid line
+            float snappedPos = std::round (position / gridPct) * gridPct;
+
+            // Spread: offset by random grid steps from snapped position
+            if (spread > 0.0f)
+            {
+                int maxSteps = juce::jmax (1, static_cast<int> (spread / gridPct));
+                int step = rng.nextInt (maxSteps * 2 + 1) - maxSteps;
+                snappedPos += step * gridPct;
+            }
+
+            pos = juce::jlimit (0.0f, 100.0f, snappedPos) / 100.0f;
+        }
+        else
+        {
+            pos = juce::jlimit (0.0f, 100.0f, position) / 100.0f;
+        }
     }
     else
     {

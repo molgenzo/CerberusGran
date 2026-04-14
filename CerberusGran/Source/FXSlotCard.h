@@ -43,8 +43,8 @@ public:
         fxSelector.addItem ("Reverb", 5);
         fxSelector.setSelectedId (1, juce::dontSendNotification);
         fxSelector.setTextWhenNothingSelected ("+ add FX");
-        fxSelector.setColour (juce::ComboBox::backgroundColourId, juce::Colour (0xff252528));
-        fxSelector.setColour (juce::ComboBox::outlineColourId, juce::Colour (0xff3A3A40));
+        fxSelector.setColour (juce::ComboBox::backgroundColourId, juce::Colour (0xff2A2A30));
+        fxSelector.setColour (juce::ComboBox::outlineColourId, juce::Colours::transparentBlack);
         fxSelector.setColour (juce::ComboBox::textColourId, juce::Colour (0xffcccccc));
         fxSelector.onChange = [this] { onFxTypeChanged(); };
         addAndMakeVisible (fxSelector);
@@ -275,8 +275,8 @@ private:
         filterKnobs[1] = makeKnob ("Res", "", "filterRes");
 
         filterTypeBox.addItemList ({ "LP", "HP", "BP" }, 1);
-        filterTypeBox.setColour (juce::ComboBox::outlineColourId, juce::Colour (0xff3A3A40));
-        filterTypeBox.setColour (juce::ComboBox::backgroundColourId, juce::Colour (0xff2A2A30));
+        filterTypeBox.setColour (juce::ComboBox::outlineColourId, juce::Colours::transparentBlack);
+        filterTypeBox.setColour (juce::ComboBox::backgroundColourId, juce::Colours::transparentBlack);
         filterTypeBox.setVisible (false);
         addAndMakeVisible (filterTypeBox);
         filterTypeAttach = std::make_unique<ComboAttach> (apvtsRef, paramId ("filterType"), filterTypeBox);
@@ -296,8 +296,8 @@ private:
 
         // Delay time mode (Time / Sync)
         delayTimeModeBox.addItemList ({ "Time", "Sync" }, 1);
-        delayTimeModeBox.setColour (juce::ComboBox::backgroundColourId, juce::Colour (0xff2A2A30));
-        delayTimeModeBox.setColour (juce::ComboBox::outlineColourId, juce::Colour (0xff3A3A40));
+        delayTimeModeBox.setColour (juce::ComboBox::backgroundColourId, juce::Colours::transparentBlack);
+        delayTimeModeBox.setColour (juce::ComboBox::outlineColourId, juce::Colours::transparentBlack);
         delayTimeModeBox.onChange = [this] { updateDelayModeVisibility(); };
         delayTimeModeBox.setVisible (false);
         addAndMakeVisible (delayTimeModeBox);
@@ -320,8 +320,8 @@ private:
 
         // Delay sync type
         delaySyncTypeBox.addItemList ({ "Norm", "Trip", "Dot" }, 1);
-        delaySyncTypeBox.setColour (juce::ComboBox::backgroundColourId, juce::Colour (0xff2A2A30));
-        delaySyncTypeBox.setColour (juce::ComboBox::outlineColourId, juce::Colour (0xff3A3A40));
+        delaySyncTypeBox.setColour (juce::ComboBox::backgroundColourId, juce::Colours::transparentBlack);
+        delaySyncTypeBox.setColour (juce::ComboBox::outlineColourId, juce::Colours::transparentBlack);
         delaySyncTypeBox.setVisible (false);
         addAndMakeVisible (delaySyncTypeBox);
         delaySyncTypeAttach = std::make_unique<ComboAttach> (apvtsRef, paramId ("delaySyncType"), delaySyncTypeBox);
