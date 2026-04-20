@@ -11,7 +11,8 @@ struct Grain
     float amplitude = 1.0f;
     float panLeft = 0.707f;
     float panRight = 0.707f;
-    int windowType = 0;
+    float windowShape = 0.0f;  // 0–1 continuous morph
+    float spawnNormPos = 0.0f; // 0–1 normalized spawn position for UI display
 
     void reset()
     {
@@ -23,7 +24,8 @@ struct Grain
         amplitude = 1.0f;
         panLeft = 0.707f;
         panRight = 0.707f;
-        windowType = 0;
+        windowShape = 0.0f;
+        spawnNormPos = 0.0f;
     }
 };
 

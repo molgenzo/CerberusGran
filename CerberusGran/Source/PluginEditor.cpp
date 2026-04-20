@@ -1,539 +1,154 @@
 #include "PluginEditor.h"
 
-// ============================================================================
-// HeadStrip — one compact row per grain head
-// ============================================================================
-static void setupLinearSlider (juce::Slider& s, const juce::String& suffix = "")
-{
-    s.setSliderStyle (juce::Slider::LinearBar);
-    s.setTextBoxIsEditable (true);
-    if (suffix.isNotEmpty()) s.setTextValueSuffix (suffix);
-}
-
-HeadStrip::HeadStrip (CerberusGranAudioProcessor& p, int headIndex, juce::Colour headColour)
-    : processor (p), index (headIndex), colour (headColour)
-{
-    auto id = [headIndex] (const juce::String& name)
-    { return "head" + juce::String (headIndex) + "_" + name; };
-
-    enableBtn.setButtonText (juce::String (headIndex + 1));
-    enableBtn.setColour (juce::ToggleButton::tickColourId, headColour);
-    addAndMakeVisible (enableBtn);
-    enableAttach = std::make_unique<ButtonAttach> (p.apvts, id ("enable"), enableBtn);
-
-    setupLinearSlider (posSlider, " %");
-    setupLinearSlider (spreadSlider, " %");
-    setupLinearSlider (rateSlider, " ms");
-    setupLinearSlider (lengthSlider, " ms");
-    setupLinearSlider (pitchSlider, " st");
-    setupLinearSlider (gainSlider, " dB");
-
-    addAndMakeVisible (posSlider);
-    addAndMakeVisible (spreadSlider);
-    addAndMakeVisible (rateSlider);
-    addAndMakeVisible (lengthSlider);
-    addAndMakeVisible (pitchSlider);
-    addAndMakeVisible (gainSlider);
-
-    posAttach    = std::make_unique<SliderAttach> (p.apvts, id ("position"), posSlider);
-    spreadAttach = std::make_unique<SliderAttach> (p.apvts, id ("spread"), spreadSlider);
-    rateAttach   = std::make_unique<SliderAttach> (p.apvts, id ("rate"), rateSlider);
-    lengthAttach = std::make_unique<SliderAttach> (p.apvts, id ("length"), lengthSlider);
-    pitchAttach  = std::make_unique<SliderAttach> (p.apvts, id ("pitch"), pitchSlider);
-    gainAttach   = std::make_unique<SliderAttach> (p.apvts, id ("gain"), gainSlider);
-
-    shapeBox.addItemList ({ "Hann", "Gauss", "Tukey", "Tri" }, 1);
-    addAndMakeVisible (shapeBox);
-    shapeAttach = std::make_unique<ComboAttach> (p.apvts, id ("shape"), shapeBox);
-
-    reverseBtn.setButtonText ("R");
-    addAndMakeVisible (reverseBtn);
-    reverseAttach = std::make_unique<ButtonAttach> (p.apvts, id ("reverse"), reverseBtn);
-
-    // Filter controls
-    filterTypeBox.addItemList ({ "Off", "LPF", "HPF", "BPF" }, 1);
-    addAndMakeVisible (filterTypeBox);
-    filterTypeAttach = std::make_unique<ComboAttach> (p.apvts, id ("filterType"), filterTypeBox);
-
-    setupLinearSlider (cutoffSlider, " Hz");
-    addAndMakeVisible (cutoffSlider);
-    cutoffAttach = std::make_unique<SliderAttach> (p.apvts, id ("filterCutoff"), cutoffSlider);
-
-    setupLinearSlider (qSlider);
-    qSlider.setTextValueSuffix (" Q");
-    addAndMakeVisible (qSlider);
-    qAttach = std::make_unique<SliderAttach> (p.apvts, id ("filterQ"), qSlider);
-}
-
-void HeadStrip::paint (juce::Graphics& g)
-{
-    g.setColour (colour.withAlpha (0.06f));
-    g.fillRoundedRectangle (getLocalBounds().toFloat(), 4.0f);
-    g.setColour (colour.withAlpha (0.25f));
-    g.drawRoundedRectangle (getLocalBounds().toFloat().reduced (0.5f), 4.0f, 1.0f);
-}
-
-void HeadStrip::resized()
-{
-    auto area = getLocalBounds().reduced (4, 2);
-
-    enableBtn.setBounds (area.removeFromLeft (36));
-    area.removeFromLeft (4);
-
-    // Fixed-width items: shapeBox(70) + reverseBtn(28) + filterTypeBox(58) + gaps
-    constexpr int shapeW = 70;
-    constexpr int revW   = 28;
-    constexpr int fTypeW = 58;
-    constexpr int fixedW = shapeW + revW + fTypeW;
-    constexpr int numSliders = 8;  // pos, spread, rate, length, pitch, cutoff, Q, gain
-    constexpr int numGaps = numSliders + 2;  // gaps between all items
-
-    int sliderW = (area.getWidth() - fixedW - numGaps * 2) / numSliders;
-
-    posSlider.setBounds    (area.removeFromLeft (sliderW)); area.removeFromLeft (2);
-    spreadSlider.setBounds (area.removeFromLeft (sliderW)); area.removeFromLeft (2);
-    rateSlider.setBounds   (area.removeFromLeft (sliderW)); area.removeFromLeft (2);
-    lengthSlider.setBounds (area.removeFromLeft (sliderW)); area.removeFromLeft (2);
-    pitchSlider.setBounds  (area.removeFromLeft (sliderW)); area.removeFromLeft (2);
-
-    shapeBox.setBounds     (area.removeFromLeft (shapeW));  area.removeFromLeft (2);
-    reverseBtn.setBounds   (area.removeFromLeft (revW));    area.removeFromLeft (2);
-
-    filterTypeBox.setBounds (area.removeFromLeft (fTypeW)); area.removeFromLeft (2);
-    cutoffSlider.setBounds  (area.removeFromLeft (sliderW)); area.removeFromLeft (2);
-    qSlider.setBounds       (area.removeFromLeft (sliderW)); area.removeFromLeft (2);
-
-    gainSlider.setBounds (area);  // remaining space
-}
-
-// ============================================================================
-// Main Editor
-// ============================================================================
 CerberusGranAudioProcessorEditor::CerberusGranAudioProcessorEditor (CerberusGranAudioProcessor& p)
     : juce::AudioProcessorEditor (&p),
       audioProcessor (p),
-      thumbnail (512, p.getFormatManager(), p.getThumbnailCache())
+      waveformDisplay (p, headColours),
+      globalBar (p.apvts, headColours)
 {
+    setLookAndFeel (&cerberusLnf);
+
     headColours = {
-        juce::Colour (0xffff6b6b),  // Coral
-        juce::Colour (0xffffa726),  // Amber
-        juce::Colour (0xff66bb6a),  // Green
-        juce::Colour (0xff4dd0e1),  // Cyan
-        juce::Colour (0xffab47bc)   // Violet
+        juce::Colour (0xff8B5CF6),  // Purple
+        juce::Colour (0xff2DD4BF),  // Teal
+        juce::Colour (0xffF97066),  // Coral
+        juce::Colour (0xffEC4899),  // Pink
+        juce::Colour (0xff3B82F6)   // Blue
     };
 
-    for (int i = 0; i < kNumHeadStrips; ++i)
+    addAndMakeVisible (waveformDisplay);
+
+    for (int i = 0; i < kNumCols; ++i)
     {
-        auto* strip = new HeadStrip (p, i, headColours[i]);
-        headStrips.add (strip);
-        addAndMakeVisible (strip);
+        auto* col = new EngineColumn (p.apvts, i, headColours[i]);
+        columns.add (col);
+        addAndMakeVisible (col);
+        col->setVisible (i == 0); // only show head 0 initially
     }
 
-    // Global controls
-    setupLinearSlider (masterGainSlider);
-    masterGainSlider.setTextValueSuffix ("x");
-    addAndMakeVisible (masterGainSlider);
-    masterGainAttach = std::make_unique<SliderAttach> (p.apvts, "masterGain", masterGainSlider);
+    addAndMakeVisible (globalBar);
 
-    setupLinearSlider (mixSlider);
-    mixSlider.setTextValueSuffix (" %");
-    addAndMakeVisible (mixSlider);
-    mixAttach = std::make_unique<SliderAttach> (p.apvts, "mix", mixSlider);
+    // Wire head navigation from GlobalBar
+    globalBar.onHeadChanged = [this] (int newHead) { switchToHead (newHead); };
+    globalBar.onPresetSaveAs = [this] { savePresetAs(); };
+    globalBar.onPresetLoad = [this] { loadPresetFromDisk(); };
 
-    freezeBtn.setButtonText ("Freeze");
-    addAndMakeVisible (freezeBtn);
-    freezeAttach = std::make_unique<ButtonAttach> (p.apvts, "freeze", freezeBtn);
-
-    sourceModeBox.addItemList ({ "Live", "File" }, 1);
-    addAndMakeVisible (sourceModeBox);
-    sourceModeAttach = std::make_unique<ComboAttach> (p.apvts, "sourceMode", sourceModeBox);
-
-    browseButton.onClick = [this]() { openFileChooser(); };
-    browseButton.setColour (juce::TextButton::buttonColourId, juce::Colour (0xffd1c7b9));
-    browseButton.setColour (juce::TextButton::textColourOffId, juce::Colour (0xff3a3a3a));
-    addAndMakeVisible (browseButton);
-
-    clearButton.onClick = [this]() { clearLoadedFile(); };
-    clearButton.setColour (juce::TextButton::buttonColourId, juce::Colour (0xffe4dbcf));
-    clearButton.setColour (juce::TextButton::textColourOffId, juce::Colour (0xff3a3a3a));
-    addAndMakeVisible (clearButton);
-
-    setSize (1020, 560);
+    // Tight sizing: topBar(48) + waveform(80) + labels(24) + fxPanel(2*118+4=240) + padding(24) = 416
+    setSize (620, 416);
     startTimerHz (30);
 }
 
 CerberusGranAudioProcessorEditor::~CerberusGranAudioProcessorEditor()
 {
     stopTimer();
+    setLookAndFeel (nullptr);
 }
 
 void CerberusGranAudioProcessorEditor::paint (juce::Graphics& g)
 {
-    g.fillAll (juce::Colour (0xfff0ebe3));  // Warm cream background
-
-    // Waveform area
-    auto waveformArea = getWaveformArea();
-
-    if (dragOver)
-    {
-        g.setColour (juce::Colours::black.withAlpha (0.05f));
-        g.fillRoundedRectangle (waveformArea.toFloat(), 6.0f);
-    }
-
-    g.setColour (juce::Colour (0xffe8e0d4));
-    g.fillRoundedRectangle (waveformArea.toFloat(), 6.0f);
-    g.setColour (juce::Colour (0xffc0b8a8));
-    g.drawRoundedRectangle (waveformArea.toFloat(), 6.0f, 1.0f);
-
-    bool isLive = (audioProcessor.getSourceMode() == AudioSourceMode::Live);
-
-    if (isLive)
-    {
-        auto inner = waveformArea.reduced (4);
-        float midY = inner.getCentreY();
-        float halfH = inner.getHeight() * 0.5f;
-        int w = inner.getWidth();
-
-        juce::Path waveformPath;
-        bool pathStarted = false;
-
-        for (int px = 0; px < w; ++px)
-        {
-            int idx = (px * kWaveformPoints) / w;
-            if (idx >= kWaveformPoints) idx = kWaveformPoints - 1;
-
-            float amp = liveWaveform[idx];
-            float y = midY - amp * halfH;
-
-            if (!pathStarted)
-            {
-                waveformPath.startNewSubPath (static_cast<float> (inner.getX() + px), y);
-                pathStarted = true;
-            }
-            else
-            {
-                waveformPath.lineTo (static_cast<float> (inner.getX() + px), y);
-            }
-        }
-
-        for (int px = w - 1; px >= 0; --px)
-        {
-            int idx = (px * kWaveformPoints) / w;
-            if (idx >= kWaveformPoints) idx = kWaveformPoints - 1;
-
-            float amp = liveWaveform[idx];
-            float y = midY + amp * halfH;
-            waveformPath.lineTo (static_cast<float> (inner.getX() + px), y);
-        }
-
-        waveformPath.closeSubPath();
-        g.setColour (juce::Colour (0xff3a3a3a).withAlpha (0.7f));
-        g.fillPath (waveformPath);
-        g.setColour (juce::Colour (0xff3a3a3a));
-        g.strokePath (waveformPath, juce::PathStrokeType (1.0f));
-    }
-    else if (fileLoaded && thumbnail.getTotalLength() > 0.0)
-    {
-        auto inner = waveformArea.reduced (4);
-        float midY = inner.getCentreY();
-        float halfH = inner.getHeight() * 0.5f;
-        int w = inner.getWidth();
-        double total = thumbnail.getTotalLength();
-
-        juce::Path waveformPath;
-        bool pathStarted = false;
-
-        for (int px = 0; px < w; ++px)
-        {
-            double t0 = (static_cast<double> (px) / w) * total;
-            double t1 = (static_cast<double> (px + 1) / w) * total;
-            float minV = 0.0f, maxV = 0.0f;
-            thumbnail.getApproximateMinMax (t0, t1, 0, minV, maxV);
-
-            float y = midY - maxV * halfH;
-            if (!pathStarted)
-            {
-                waveformPath.startNewSubPath (static_cast<float> (inner.getX() + px), y);
-                pathStarted = true;
-            }
-            else
-            {
-                waveformPath.lineTo (static_cast<float> (inner.getX() + px), y);
-            }
-        }
-
-        for (int px = w - 1; px >= 0; --px)
-        {
-            double t0 = (static_cast<double> (px) / w) * total;
-            double t1 = (static_cast<double> (px + 1) / w) * total;
-            float minV = 0.0f, maxV = 0.0f;
-            thumbnail.getApproximateMinMax (t0, t1, 0, minV, maxV);
-
-            float y = midY - minV * halfH;
-            waveformPath.lineTo (static_cast<float> (inner.getX() + px), y);
-        }
-
-        waveformPath.closeSubPath();
-        g.setColour (juce::Colour (0xff3a3a3a).withAlpha (0.7f));
-        g.fillPath (waveformPath);
-        g.setColour (juce::Colour (0xff3a3a3a));
-        g.strokePath (waveformPath, juce::PathStrokeType (1.0f));
-    }
-    else
-    {
-        g.setColour (juce::Colour (0xff8a8070));
-        g.setFont (14.0f);
-        auto msg = isLive ? "Live mode captures DAW input"
-                          : "Click Browse to load an audio file";
-        g.drawFittedText (msg, waveformArea, juce::Justification::centred, 1);
-    }
-
-    if (!isLive)
-    {
-        auto statusArea = waveformArea;
-        statusArea = statusArea.removeFromBottom (18).reduced (8, 0);
-        g.setColour (juce::Colour (0xff6a6050));
-        g.setFont (11.5f);
-
-        if (loadError.isNotEmpty())
-            g.drawFittedText (loadError, statusArea, juce::Justification::centredLeft, 1);
-        else if (loadedFileName.isNotEmpty())
-            g.drawFittedText (loadedFileName, statusArea, juce::Justification::centredLeft, 1);
-    }
-
-    // Draw head position markers on waveform
-    for (int i = 0; i < kNumHeadStrips; ++i)
-    {
-        auto* enabledParam = audioProcessor.apvts.getRawParameterValue ("head" + juce::String (i) + "_enable");
-        if (enabledParam == nullptr || enabledParam->load() < 0.5f)
-            continue;
-
-        float pos = *audioProcessor.apvts.getRawParameterValue ("head" + juce::String (i) + "_position");
-        float normPos = pos / 100.0f;
-        int x = waveformArea.getX() + static_cast<int> (normPos * waveformArea.getWidth());
-
-        g.setColour (headColours[i].withAlpha (0.8f));
-        g.drawVerticalLine (x, static_cast<float> (waveformArea.getY()),
-                           static_cast<float> (waveformArea.getBottom()));
-
-        juce::Path triangle;
-        float ty = static_cast<float> (waveformArea.getBottom()) - 14.0f;
-        triangle.addTriangle (static_cast<float> (x) - 5.0f, ty + 10.0f,
-                              static_cast<float> (x) + 5.0f, ty + 10.0f,
-                              static_cast<float> (x), ty);
-        g.setColour (headColours[i]);
-        g.fillPath (triangle);
-
-        float spread = *audioProcessor.apvts.getRawParameterValue ("head" + juce::String (i) + "_spread");
-        if (spread > 0.5f)
-        {
-            int spreadPx = static_cast<int> ((spread / 100.0f) * waveformArea.getWidth());
-            g.setColour (headColours[i].withAlpha (0.12f));
-            g.fillRect (x - spreadPx, waveformArea.getY(), spreadPx * 2, waveformArea.getHeight());
-        }
-    }
-
-    // Column headers above head strips
-    auto headerArea = getLocalBounds();
-    headerArea.removeFromTop (220);
-    auto headerRow = headerArea.removeFromTop (18).reduced (10, 0);
-
-    g.setColour (juce::Colour (0xff6a6050));
-    g.setFont (juce::FontOptions (11.0f, juce::Font::bold));
-
-    headerRow.removeFromLeft (40); // enable btn space
-
-    constexpr int shapeW = 70;
-    constexpr int revW   = 28;
-    constexpr int fTypeW = 58;
-    constexpr int fixedW = shapeW + revW + fTypeW;
-    constexpr int numSliders = 8;
-    constexpr int numGaps = numSliders + 2;
-    int colW = (headerRow.getWidth() - fixedW - numGaps * 2) / numSliders;
-
-    g.drawText ("position",  headerRow.removeFromLeft (colW), juce::Justification::centred); headerRow.removeFromLeft (2);
-    g.drawText ("spread",    headerRow.removeFromLeft (colW), juce::Justification::centred); headerRow.removeFromLeft (2);
-    g.drawText ("rate",      headerRow.removeFromLeft (colW), juce::Justification::centred); headerRow.removeFromLeft (2);
-    g.drawText ("length",    headerRow.removeFromLeft (colW), juce::Justification::centred); headerRow.removeFromLeft (2);
-    g.drawText ("pitch",     headerRow.removeFromLeft (colW), juce::Justification::centred); headerRow.removeFromLeft (2);
-    g.drawText ("shape",     headerRow.removeFromLeft (shapeW), juce::Justification::centred); headerRow.removeFromLeft (2);
-    headerRow.removeFromLeft (revW + 2); // reverse btn (no header label needed)
-    g.drawText ("filter",    headerRow.removeFromLeft (fTypeW), juce::Justification::centred); headerRow.removeFromLeft (2);
-    g.drawText ("cutoff",    headerRow.removeFromLeft (colW), juce::Justification::centred); headerRow.removeFromLeft (2);
-    g.drawText ("Q",         headerRow.removeFromLeft (colW), juce::Justification::centred); headerRow.removeFromLeft (2);
-    g.drawText ("gain",      headerRow, juce::Justification::centred);
-
-    // Bottom bar background
-    auto bottomBar = getLocalBounds().removeFromBottom (44);
-    g.setColour (juce::Colour (0xffe0d8cc));
-    g.fillRect (bottomBar);
-    g.setColour (juce::Colour (0xff6a6050));
-    g.setFont (juce::FontOptions (13.0f, juce::Font::bold));
-    g.drawText ("CerberusGran", bottomBar.removeFromLeft (120), juce::Justification::centred);
+    g.fillAll (juce::Colour (0xff1A1A1E));
 }
 
 void CerberusGranAudioProcessorEditor::resized()
 {
     auto area = getLocalBounds();
-    area.removeFromTop (220);   // waveform
-    area.removeFromTop (18);    // column headers
 
-    auto bottomBar = area.removeFromBottom (44);
+    // Global bar at top
+    globalBar.setBounds (area.removeFromTop (48));
 
-    // Head strips
-    for (auto* strip : headStrips)
-    {
-        strip->setBounds (area.removeFromTop (36).reduced (10, 2));
-    }
+    // Waveform below global bar
+    waveformDisplay.setBounds (area.removeFromTop (80).reduced (8, 4));
 
-    // Bottom bar controls
-    auto ctrl = bottomBar.reduced (10, 8);
-    ctrl.removeFromLeft (120); // logo space
-
-    auto leftCtrl = ctrl.removeFromLeft (300);
-    freezeBtn.setBounds (leftCtrl.removeFromLeft (70));
-    leftCtrl.removeFromLeft (8);
-    sourceModeBox.setBounds (leftCtrl.removeFromLeft (70).withHeight (24).withY (leftCtrl.getY()));
-
-    auto rightCtrl = ctrl.removeFromRight (240);
-    auto gainArea = rightCtrl.removeFromLeft (110);
-    masterGainSlider.setBounds (gainArea.withHeight (24).withY (rightCtrl.getY()));
-    rightCtrl.removeFromLeft (8);
-    mixSlider.setBounds (rightCtrl.withHeight (24).withY (rightCtrl.getY()));
-
-    auto waveformArea = getWaveformArea();
-    auto topRow = waveformArea.removeFromTop (28);
-    clearButton.setBounds (topRow.removeFromRight (70).reduced (4, 2));
-    browseButton.setBounds (topRow.removeFromRight (100).reduced (4, 2));
-}
-
-void CerberusGranAudioProcessorEditor::updateLiveWaveform()
-{
-    auto& rb = audioProcessor.getRingBuffer();
-    int ringSize = rb.getBufferSize();
-    if (ringSize == 0) return;
-
-    int wp = rb.getWritePosition();
-    int samplesPerPoint = juce::jmax (1, ringSize / kWaveformPoints);
-
-    for (int i = 0; i < kWaveformPoints; ++i)
-    {
-        int startSample = wp - ringSize + i * samplesPerPoint;
-
-        float maxVal = 0.0f;
-        for (int s = 0; s < samplesPerPoint; ++s)
-        {
-            float v = rb.readSample (0, static_cast<double> (startSample + s));
-            float absV = std::fabs (v);
-            if (absV > maxVal) maxVal = absV;
-        }
-        liveWaveform[i] = maxVal;
-    }
+    // Single engine column fills remaining space
+    auto columnArea = area.reduced (2, 2);
+    for (int i = 0; i < kNumCols; ++i)
+        columns[i]->setBounds (columnArea);
 }
 
 void CerberusGranAudioProcessorEditor::timerCallback()
 {
-    updateSourceModeUi();
+    waveformDisplay.updateSourceModeUi();
+
     if (audioProcessor.getSourceMode() == AudioSourceMode::Live)
-        updateLiveWaveform();
+        waveformDisplay.updateLiveWaveform();
 
-    repaint (getLocalBounds().removeFromTop (220));
+    waveformDisplay.repaint();
 }
 
-bool CerberusGranAudioProcessorEditor::isInterestedInFileDrag (const juce::StringArray& files)
+void CerberusGranAudioProcessorEditor::switchToHead (int headIndex)
 {
-    if (audioProcessor.getSourceMode() == AudioSourceMode::Live)
-        return false;
+    headIndex = juce::jlimit (0, kNumCols - 1, headIndex);
+    if (headIndex == currentHeadIndex) return;
 
-    for (auto& f : files)
-        if (f.endsWith (".wav") || f.endsWith (".aif") || f.endsWith (".aiff") ||
-            f.endsWith (".mp3") || f.endsWith (".flac") || f.endsWith (".ogg"))
-            return true;
-    return false;
+    columns[currentHeadIndex]->setVisible (false);
+    currentHeadIndex = headIndex;
+    columns[currentHeadIndex]->setVisible (true);
+    waveformDisplay.setActiveHead (headIndex);
 }
 
-void CerberusGranAudioProcessorEditor::fileDragEnter (const juce::StringArray& files, int, int)
+void CerberusGranAudioProcessorEditor::savePresetAs()
 {
-    if (isInterestedInFileDrag (files)) { dragOver = true; repaint(); }
-}
+    presetFileChooser = std::make_unique<juce::FileChooser> (
+        "Save preset as",
+        juce::File::getSpecialLocation (juce::File::userDocumentsDirectory),
+        "*.pocketpreset");
 
-void CerberusGranAudioProcessorEditor::fileDragExit (const juce::StringArray&)
-{
-    if (dragOver) { dragOver = false; repaint(); }
-}
+    const auto flags = juce::FileBrowserComponent::saveMode
+                     | juce::FileBrowserComponent::canSelectFiles
+                     | juce::FileBrowserComponent::warnAboutOverwriting;
 
-void CerberusGranAudioProcessorEditor::filesDropped (const juce::StringArray& files, int, int)
-{
-    dragOver = false;
-    for (auto& f : files)
+    presetFileChooser->launchAsync (flags, [this] (const juce::FileChooser& chooser)
     {
-        juce::File file (f);
-        if (file.existsAsFile())
+        auto target = chooser.getResult();
+        if (target == juce::File())
+            return;
+
+        if (!target.hasFileExtension ("pocketpreset"))
+            target = target.withFileExtension (".pocketpreset");
+
+        if (!audioProcessor.savePresetToFile (target))
         {
-            handleFileLoad (file);
-            repaint();
-            break;
+            juce::NativeMessageBox::showMessageBoxAsync (
+                juce::MessageBoxIconType::WarningIcon,
+                "Preset Save Failed",
+                "Could not save preset to the selected file.");
         }
-    }
-}
 
-juce::Rectangle<int> CerberusGranAudioProcessorEditor::getWaveformArea() const
-{
-    return getLocalBounds().removeFromTop (220).reduced (10);
-}
-
-void CerberusGranAudioProcessorEditor::openFileChooser()
-{
-    if (audioProcessor.getSourceMode() == AudioSourceMode::Live)
-        return;
-
-    fileChooser = std::make_unique<juce::FileChooser> (
-        "Select an audio file",
-        juce::File::getSpecialLocation (juce::File::userMusicDirectory),
-        "*.wav;*.aif;*.aiff;*.flac;*.mp3;*.ogg");
-
-    auto flags = juce::FileBrowserComponent::openMode | juce::FileBrowserComponent::canSelectFiles;
-    fileChooser->launchAsync (flags, [this] (const juce::FileChooser& fc)
-    {
-        auto file = fc.getResult();
-        if (file != juce::File{} && file.existsAsFile())
-            handleFileLoad (file);
+        presetFileChooser.reset();
     });
 }
 
-void CerberusGranAudioProcessorEditor::handleFileLoad (const juce::File& file)
+void CerberusGranAudioProcessorEditor::loadPresetFromDisk()
 {
-    if (!file.existsAsFile())
+    const bool wasFileMode = (audioProcessor.getSourceMode() == AudioSourceMode::File);
+
+    presetFileChooser = std::make_unique<juce::FileChooser> (
+        "Load preset",
+        juce::File::getSpecialLocation (juce::File::userDocumentsDirectory),
+        "*.pocketpreset;*.xml");
+
+    const auto flags = juce::FileBrowserComponent::openMode
+                     | juce::FileBrowserComponent::canSelectFiles;
+
+    presetFileChooser->launchAsync (flags, [this, wasFileMode] (const juce::FileChooser& chooser)
     {
-        loadError = "File does not exist.";
-        fileLoaded = false;
-        repaint();
-        return;
-    }
+        auto source = chooser.getResult();
+        if (source == juce::File())
+            return;
 
-    audioProcessor.loadSampleFile (file);
-    thumbnail.setSource (new juce::FileInputSource (file));
-    fileLoaded = true;
-    loadedFileName = file.getFileName();
-    loadError.clear();
-    repaint();
-}
+        if (!audioProcessor.loadPresetFromFile (source))
+        {
+            juce::NativeMessageBox::showMessageBoxAsync (
+                juce::MessageBoxIconType::WarningIcon,
+                "Preset Load Failed",
+                "Could not load preset from the selected file.");
+        }
+        else
+        {
+            if (auto* modeParam = audioProcessor.apvts.getParameter ("sourceMode"))
+                modeParam->setValueNotifyingHost (wasFileMode ? 1.0f : 0.0f);
+        }
 
-void CerberusGranAudioProcessorEditor::clearLoadedFile()
-{
-    audioProcessor.clearSampleFile();
-    thumbnail.clear();
-    fileLoaded = false;
-    loadedFileName.clear();
-    loadError.clear();
-    repaint();
-}
-
-void CerberusGranAudioProcessorEditor::updateSourceModeUi()
-{
-    bool isLive = (audioProcessor.getSourceMode() == AudioSourceMode::Live);
-    browseButton.setVisible (!isLive);
-    browseButton.setEnabled (!isLive);
-    clearButton.setVisible (!isLive);
-    clearButton.setEnabled (!isLive);
+        presetFileChooser.reset();
+    });
 }

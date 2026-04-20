@@ -23,7 +23,7 @@ public:
     const juce::String getName() const override { return "CerberusGran"; }
     bool acceptsMidi() const override { return false; }
     bool producesMidi() const override { return false; }
-    double getTailLengthSeconds() const override { return 0.0; }
+    double getTailLengthSeconds() const override { return 2.0; }
 
     int getNumPrograms() override { return 1; }
     int getCurrentProgram() override { return 0; }
@@ -33,8 +33,10 @@ public:
 
     void getStateInformation (juce::MemoryBlock& destData) override;
     void setStateInformation (const void* data, int sizeInBytes) override;
+    bool savePresetToFile (const juce::File& file);
+    bool loadPresetFromFile (const juce::File& file);
 
-    void loadSampleFile (const juce::File& file);
+    bool loadSampleFile (const juce::File& file);
     void clearSampleFile();
 
     RingBuffer& getRingBuffer() { return ringBuffer; }
@@ -48,6 +50,10 @@ public:
     juce::AudioThumbnailCache& getThumbnailCache() { return thumbnailCache; }
 
     juce::AudioProcessorValueTreeState apvts;
+
+    // Grid info for waveform display (set during updateParametersFromAPVTS)
+    std::atomic<float> syncGridMs { 0.0f };    // 0 = no grid
+    std::atomic<bool> anySyncActive { false };
 
 private:
     void updateParametersFromAPVTS();
@@ -71,23 +77,44 @@ private:
     // Cached param pointers
     std::atomic<float>* masterGainParam = nullptr;
     std::atomic<float>* mixParam = nullptr;
-    std::atomic<float>* freezeParam = nullptr;
     std::atomic<float>* sourceModeParam = nullptr;
 
     struct HeadParamPtrs
     {
         std::atomic<float>* enable = nullptr;
+        std::atomic<float>* freeze = nullptr;
         std::atomic<float>* position = nullptr;
         std::atomic<float>* spread = nullptr;
+        std::atomic<float>* rateMode = nullptr;
         std::atomic<float>* rate = nullptr;
+        std::atomic<float>* rateSyncDiv = nullptr;
+        std::atomic<float>* rateSyncType = nullptr;
+        std::atomic<float>* sizeLink = nullptr;
         std::atomic<float>* length = nullptr;
+        std::atomic<float>* sizeRatio = nullptr;
         std::atomic<float>* pitch = nullptr;
         std::atomic<float>* shape = nullptr;
         std::atomic<float>* reverse = nullptr;
         std::atomic<float>* gain = nullptr;
+        // FX chain
+        std::atomic<float>* filterOn = nullptr;
         std::atomic<float>* filterType = nullptr;
         std::atomic<float>* filterCutoff = nullptr;
-        std::atomic<float>* filterQ = nullptr;
+        std::atomic<float>* filterRes = nullptr;
+        std::atomic<float>* crushOn = nullptr;
+        std::atomic<float>* crushBits = nullptr;
+        std::atomic<float>* crushRate = nullptr;
+        std::atomic<float>* delayOn = nullptr;
+        std::atomic<float>* delayTimeMode = nullptr;
+        std::atomic<float>* delayTime = nullptr;
+        std::atomic<float>* delaySyncDiv = nullptr;
+        std::atomic<float>* delaySyncType = nullptr;
+        std::atomic<float>* delayFeedback = nullptr;
+        std::atomic<float>* delayMix = nullptr;
+        std::atomic<float>* reverbOn = nullptr;
+        std::atomic<float>* reverbSize = nullptr;
+        std::atomic<float>* reverbDamp = nullptr;
+        std::atomic<float>* reverbMix = nullptr;
     };
 
     std::array<HeadParamPtrs, kNumHeads> headParams;

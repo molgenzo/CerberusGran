@@ -3,7 +3,7 @@
 #include "Grain.h"
 #include "WindowFunctions.h"
 #include "Parameters.h"
-#include "HeadFilter.h"
+#include "HeadFXChain.h"
 
 class GrainHead
 {
@@ -16,21 +16,53 @@ public:
                   const juce::AudioBuffer<float>* sampleBuffer,
                   bool liveMode);
 
+    // Grain params
     void setEnabled (bool e)          { enabled = e; }
-    void setPosition (float p)        { position = p; }        // 0-100 %
-    void setSpread (float s)          { spread = s; }          // 0-50 %
-    void setRate (float ms)           { rateMs = ms; }         // ms between grains
-    void setLength (float ms)         { lengthMs = ms; }       // grain duration ms
-    void setPitchSemitones (float st) { pitchSt = st; }        // -24 to +24
-    void setShape (int s)             { shape = s; }           // window type
-    void setReverse (bool r)          { reverse = r; }
+    void setPosition (float p)        { position = p; }
+    void setSpread (float s)          { spread = s; }
+    void setRate (float ms)           { rateMs = ms; }
+    void setLength (float ms)         { lengthMs = ms; }
+    void setPitchSemitones (float st) { pitchSt = st; }
+    void setShape (float s)           { shape = s; }
+    void setReversePct (float pct)     { reversePct = pct; }
+    void setSyncGrid (bool on, float gridMs) { syncGrid = on; syncGridMs = gridMs; }
     void setGainDb (float db)         { gainLinear = juce::Decibels::decibelsToGain (db); }
 
-    // Filter: type 0=Off, 1=LPF, 2=HPF, 3=BPF
-    void setFilterParams (int type, float cutoffHz, float q)
+    // FX chain setters (forwarded to fxChain)
+    void setFilterEnabled (bool on)   { fxChain.setFilterEnabled (on); }
+    void setFilterType (int t)        { fxChain.setFilterType (t); }
+    void setFilterCutoff (float hz)   { fxChain.setFilterCutoff (hz); }
+    void setFilterResonance (float r) { fxChain.setFilterResonance (r); }
+
+    void setCrushEnabled (bool on)    { fxChain.setCrushEnabled (on); }
+    void setCrushBits (float b)       { fxChain.setCrushBits (b); }
+    void setCrushRate (float r)       { fxChain.setCrushRate (r); }
+
+    void setDelayEnabled (bool on)    { fxChain.setDelayEnabled (on); }
+    void setDelayTime (float ms)      { fxChain.setDelayTime (ms); }
+    void setDelayFeedback (float f)   { fxChain.setDelayFeedback (f); }
+    void setDelayMix (float m)        { fxChain.setDelayMix (m); }
+
+    void setReverbEnabled (bool on)   { fxChain.setReverbEnabled (on); }
+    void setReverbSize (float s)      { fxChain.setReverbSize (s); }
+    void setReverbDamp (float d)      { fxChain.setReverbDamp (d); }
+    void setReverbMix (float m)       { fxChain.setReverbMix (m); }
+
+    // Grain visualization snapshot (read by UI thread)
+    struct GrainSnapshot
     {
-        headFilter.update (type, cutoffHz, q);
-    }
+        float normPosition = 0.0f;  // 0–1 position in buffer
+        float normLength = 0.0f;    // 0–1 length relative to buffer
+        float progress = 0.0f;      // 0–1 how far through the grain
+        bool active = false;
+    };
+
+    static constexpr int kMaxSnapshotGrains = 32;
+    std::array<GrainSnapshot, kMaxSnapshotGrains> grainSnapshots {};
+    std::atomic<int> activeGrainCount { 0 };
+
+    const std::array<GrainSnapshot, kMaxSnapshotGrains>& getGrainSnapshots() const { return grainSnapshots; }
+    int getActiveGrainCount() const { return activeGrainCount.load (std::memory_order_relaxed); }
 
 private:
     void spawnGrain (const class RingBuffer& ringBuffer,
@@ -43,8 +75,10 @@ private:
     float rateMs = 100.0f;
     float lengthMs = 200.0f;
     float pitchSt = 0.0f;
-    int shape = 0;
-    bool reverse = false;
+    float shape = 0.0f;
+    float reversePct = 0.0f;  // 0-100%
+    bool syncGrid = false;
+    float syncGridMs = 0.0f;  // grid spacing in ms (one subdivision)
     float gainLinear = 1.0f;
 
     double sampleRate = 44100.0;
@@ -53,7 +87,7 @@ private:
     GrainPool grainPool;
     juce::Random rng;
 
-    // Per-head filter and temp buffer
-    HeadFilter headFilter;
+    // Per-head intermediate buffer and FX chain
     juce::AudioBuffer<float> headBuffer;
+    HeadFXChain fxChain;
 };
