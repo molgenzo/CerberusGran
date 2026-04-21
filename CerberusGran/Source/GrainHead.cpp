@@ -202,7 +202,7 @@ void GrainHead::process (juce::AudioBuffer<float>& output, int numSamples,
 
     // Apply FX chain to per-head buffer
     fxChain.process (headBuffer, numSamples);
-
+    DBG ("Output Channels: " << output.getNumChannels() << " | HeadBuffer Channels: " << headBuffer.getNumChannels());
     // Mix processed head buffer into shared output
     for (int ch = 0; ch < juce::jmin (output.getNumChannels(), headBuffer.getNumChannels()); ++ch)
         output.addFrom (ch, 0, headBuffer, ch, 0, numSamples);

@@ -42,6 +42,7 @@ public:
     void setDelayTime (float ms)      { fxChain.setDelayTime (ms); }
     void setDelayFeedback (float f)   { fxChain.setDelayFeedback (f); }
     void setDelayMix (float m)        { fxChain.setDelayMix (m); }
+    void setDelayPingPong (bool on)   { fxChain.setDelayPingPong (on); }
 
     void setReverbEnabled (bool on)   { fxChain.setReverbEnabled (on); }
     void setReverbSize (float s)      { fxChain.setReverbSize (s); }

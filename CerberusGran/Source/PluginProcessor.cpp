@@ -50,6 +50,7 @@ CerberusGranAudioProcessor::CerberusGranAudioProcessor()
         hp.delaySyncType = apvts.getRawParameterValue (id ("delaySyncType"));
         hp.delayFeedback = apvts.getRawParameterValue (id ("delayFeedback"));
         hp.delayMix      = apvts.getRawParameterValue (id ("delayMix"));
+        hp.delayPingPong = apvts.getRawParameterValue (id ("delayPingPong"));
         hp.reverbOn      = apvts.getRawParameterValue (id ("reverbOn"));
         hp.reverbSize    = apvts.getRawParameterValue (id ("reverbSize"));
         hp.reverbDamp    = apvts.getRawParameterValue (id ("reverbDamp"));
@@ -61,12 +62,13 @@ CerberusGranAudioProcessor::~CerberusGranAudioProcessor() = default;
 
 bool CerberusGranAudioProcessor::isBusesLayoutSupported (const BusesLayout& layouts) const
 {
-    if (layouts.getMainOutputChannelSet() != juce::AudioChannelSet::mono()
-     && layouts.getMainOutputChannelSet() != juce::AudioChannelSet::stereo())
+
+    const auto& outputSet = layouts.getMainOutputChannelSet();
+
+
+    if (outputSet != juce::AudioChannelSet::stereo())
         return false;
 
-    if (layouts.getMainOutputChannelSet() != layouts.getMainInputChannelSet())
-        return false;
 
     return true;
 }
@@ -217,6 +219,7 @@ void CerberusGranAudioProcessor::updateParametersFromAPVTS()
         }
         head.setDelayFeedback (hp.delayFeedback->load());
         head.setDelayMix (hp.delayMix->load());
+        head.setDelayPingPong (hp.delayPingPong->load() >= 0.5f);
 
         head.setReverbEnabled (hp.reverbOn->load() >= 0.5f);
         head.setReverbSize (hp.reverbSize->load());
@@ -233,34 +236,41 @@ void CerberusGranAudioProcessor::processBlock (juce::AudioBuffer<float>& buffer,
 {
     juce::ScopedNoDenormals noDenormals;
 
-    // Write to ring buffer unless frozen
-    if (!freeze.load (std::memory_order_relaxed))
-        ringBuffer.write (buffer, buffer.getNumSamples());
-
     updateParametersFromAPVTS();
 
     bool liveMode = (getSourceMode() == AudioSourceMode::Live);
     const auto* sb = getSampleBuffer();
-
-    float mixPct = mixParam->load();          // 0-100
+    
+    float mixPct = mixParam->load();
     float wet = mixPct / 100.0f;
     int numSamples = buffer.getNumSamples();
     int numCh = buffer.getNumChannels();
 
+    if (!freeze.load (std::memory_order_relaxed))
+        ringBuffer.write (buffer, numSamples);
+
     if (wet < 1.0f)
     {
-        for (int ch = 0; ch < juce::jmin (2, numCh); ++ch)
-            dryBuffer.copyFrom (ch, 0, buffer, ch, 0, numSamples);
+        for (int ch = 0; ch < 2; ++ch)
+        {
+            int sourceCh = juce::jmin (ch, numCh - 1);
+            dryBuffer.copyFrom (ch, 0, buffer, sourceCh, 0, numSamples);
+        }
 
         buffer.clear();
+        
         grainEngine.process (buffer, numSamples, ringBuffer, sb, liveMode);
 
         for (int ch = 0; ch < numCh; ++ch)
         {
             float* w = buffer.getWritePointer (ch);
-            const float* d = dryBuffer.getReadPointer (juce::jmin (ch, 1));
+            
+            const float* d = dryBuffer.getReadPointer (ch);
+            
             for (int i = 0; i < numSamples; ++i)
+            {
                 w[i] = d[i] * (1.0f - wet) + w[i] * wet;
+            }
         }
     }
     else
