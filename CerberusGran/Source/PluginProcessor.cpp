@@ -35,14 +35,21 @@ CerberusGranAudioProcessor::CerberusGranAudioProcessor()
         hp.shape    = apvts.getRawParameterValue (id ("shape"));
         hp.reverse  = apvts.getRawParameterValue (id ("reverse"));
         hp.gain     = apvts.getRawParameterValue (id ("gain"));
-        // FX chain
-        hp.filterOn      = apvts.getRawParameterValue (id ("filterOn"));
-        hp.filterType    = apvts.getRawParameterValue (id ("filterType"));
-        hp.filterCutoff  = apvts.getRawParameterValue (id ("filterCutoff"));
-        hp.filterRes     = apvts.getRawParameterValue (id ("filterRes"));
+
+        // Filter (extended)
+        hp.filterOn       = apvts.getRawParameterValue (id ("filterOn"));
+        hp.filterType     = apvts.getRawParameterValue (id ("filterType"));
+        hp.filterCutoff   = apvts.getRawParameterValue (id ("filterCutoff"));
+        hp.filterRes      = apvts.getRawParameterValue (id ("filterRes"));
+        hp.filterPan      = apvts.getRawParameterValue (id ("filterPan"));
+        hp.filterDrive    = apvts.getRawParameterValue (id ("filterDrive"));
+        hp.filterCombFreq = apvts.getRawParameterValue (id ("filterCombFreq"));
+        hp.filterMix      = apvts.getRawParameterValue (id ("filterMix"));
+
         hp.crushOn       = apvts.getRawParameterValue (id ("crushOn"));
         hp.crushBits     = apvts.getRawParameterValue (id ("crushBits"));
         hp.crushRate     = apvts.getRawParameterValue (id ("crushRate"));
+
         hp.delayOn       = apvts.getRawParameterValue (id ("delayOn"));
         hp.delayTimeMode = apvts.getRawParameterValue (id ("delayTimeMode"));
         hp.delayTime     = apvts.getRawParameterValue (id ("delayTime"));
@@ -50,6 +57,7 @@ CerberusGranAudioProcessor::CerberusGranAudioProcessor()
         hp.delaySyncType = apvts.getRawParameterValue (id ("delaySyncType"));
         hp.delayFeedback = apvts.getRawParameterValue (id ("delayFeedback"));
         hp.delayMix      = apvts.getRawParameterValue (id ("delayMix"));
+
         hp.reverbOn      = apvts.getRawParameterValue (id ("reverbOn"));
         hp.reverbSize    = apvts.getRawParameterValue (id ("reverbSize"));
         hp.reverbDamp    = apvts.getRawParameterValue (id ("reverbDamp"));
@@ -100,6 +108,7 @@ void CerberusGranAudioProcessor::updateParametersFromAPVTS()
         head.setEnabled (hp.enable->load() >= 0.5f);
         head.setPosition (hp.position->load());
         head.setSpread (hp.spread->load());
+
         // Rate: Time mode uses raw ms, Sync mode calculates from tempo
         float effectiveRateMs = hp.rate->load();
         {
@@ -111,36 +120,27 @@ void CerberusGranAudioProcessor::updateParametersFromAPVTS()
             }
             else // Sync
             {
-                double bpm = 120.0; // fallback
+                double bpm = 120.0;
                 if (auto* playHead = getPlayHead())
-                {
                     if (auto pos = playHead->getPosition())
-                    {
                         if (auto b = pos->getBpm())
                             bpm = *b;
-                    }
-                }
 
-                // Division: 0=1/1, 1=1/2, 2=1/4, 3=1/8, ..., 8=1/256
                 int divIdx = static_cast<int> (hp.rateSyncDiv->load());
-                double divValue = 1.0 / (1 << divIdx); // 1, 0.5, 0.25, 0.125...
+                double divValue = 1.0 / (1 << divIdx);
                 double quarterMs = 60000.0 / bpm;
-                double noteMs = divValue * 4.0 * quarterMs; // relative to whole note
+                double noteMs = divValue * 4.0 * quarterMs;
 
-                // Type: 0=Normal, 1=Triplet, 2=Dotted
                 int syncType = static_cast<int> (hp.rateSyncType->load());
-                if (syncType == 1)      noteMs *= 2.0 / 3.0;  // triplet
-                else if (syncType == 2) noteMs *= 3.0 / 2.0;  // dotted
+                if (syncType == 1)      noteMs *= 2.0 / 3.0;
+                else if (syncType == 2) noteMs *= 3.0 / 2.0;
 
                 effectiveRateMs = static_cast<float> (juce::jmax (1.0, noteMs));
                 head.setRate (effectiveRateMs);
-
-                // Pass grid info for quantized spread
                 head.setSyncGrid (true, effectiveRateMs);
             }
         }
 
-        // If not in sync mode, disable grid
         if (static_cast<int> (hp.rateMode->load()) == 0)
         {
             head.setSyncGrid (false, 0.0f);
@@ -152,11 +152,9 @@ void CerberusGranAudioProcessor::updateParametersFromAPVTS()
                 finestGridMs = effectiveRateMs;
         }
 
-        // Length: free or linked to rate as a ratio
         bool linked = hp.sizeLink->load() >= 0.5f;
         if (linked)
         {
-            // Ratios: 0=1:4, 1=1:2, 2=1:1, 3=2:1, 4=4:1, 5=8:1, 6=16:1
             static const float ratios[] = { 0.25f, 0.5f, 1.0f, 2.0f, 4.0f, 8.0f, 16.0f };
             int ratioIdx = juce::jlimit (0, 6, static_cast<int> (hp.sizeRatio->load()));
             float linkedLength = effectiveRateMs * ratios[ratioIdx];
@@ -171,18 +169,21 @@ void CerberusGranAudioProcessor::updateParametersFromAPVTS()
         head.setReversePct (hp.reverse->load());
         head.setGainDb (hp.gain->load());
 
-        // FX chain
-        head.setFilterEnabled (hp.filterOn->load() >= 0.5f);
-        head.setFilterType (static_cast<int> (hp.filterType->load()));
-        head.setFilterCutoff (hp.filterCutoff->load());
-        head.setFilterResonance (hp.filterRes->load());
+        // ---- Filter (extended) ----
+        head.setFilterEnabled  (hp.filterOn->load() >= 0.5f);
+        head.setFilterType     (static_cast<int> (hp.filterType->load()));
+        head.setFilterCutoff   (hp.filterCutoff->load());
+        head.setFilterResonance(hp.filterRes->load());
+        head.setFilterPan      (hp.filterPan->load());
+        head.setFilterDrive    (hp.filterDrive->load());
+        head.setFilterCombFreq (hp.filterCombFreq->load());
+        head.setFilterMix      (hp.filterMix->load());
 
         head.setCrushEnabled (hp.crushOn->load() >= 0.5f);
         head.setCrushBits (hp.crushBits->load());
         head.setCrushRate (hp.crushRate->load());
 
         head.setDelayEnabled (hp.delayOn->load() >= 0.5f);
-        // Delay time: Time mode uses raw ms, Sync mode calculates from tempo
         {
             int dtMode = static_cast<int> (hp.delayTimeMode->load());
             if (dtMode == 0)
@@ -227,7 +228,6 @@ void CerberusGranAudioProcessor::processBlock (juce::AudioBuffer<float>& buffer,
 {
     juce::ScopedNoDenormals noDenormals;
 
-    // Write to ring buffer unless frozen
     if (!freeze.load (std::memory_order_relaxed))
         ringBuffer.write (buffer, buffer.getNumSamples());
 
@@ -236,7 +236,7 @@ void CerberusGranAudioProcessor::processBlock (juce::AudioBuffer<float>& buffer,
     bool liveMode = (getSourceMode() == AudioSourceMode::Live);
     const auto* sb = getSampleBuffer();
 
-    float mixPct = mixParam->load();          // 0-100
+    float mixPct = mixParam->load();
     float wet = mixPct / 100.0f;
     int numSamples = buffer.getNumSamples();
     int numCh = buffer.getNumChannels();

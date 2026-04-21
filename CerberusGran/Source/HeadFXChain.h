@@ -1,6 +1,7 @@
 #pragma once
 #include <JuceHeader.h>
 #include "Bitcrusher.h"
+#include "CombFilter.h"
 
 class HeadFXChain
 {
@@ -11,10 +12,17 @@ public:
     {
         sampleRate = sr;
 
-        // Filter
+        // Standard SVF filter
         juce::dsp::ProcessSpec spec { sr, static_cast<juce::uint32> (maxBlockSize), 2 };
         svfFilter.prepare (spec);
         svfFilter.setType (juce::dsp::StateVariableTPTFilterType::lowpass);
+
+        // Comb filter bank
+        combFilter.prepare (sr, maxBlockSize);
+
+        // Scratch buffer for the filter wet signal
+        filterWetBuffer.setSize (2, maxBlockSize);
+        filterWetBuffer.clear();
 
         // Bitcrusher
         crusher.reset();
@@ -32,30 +40,90 @@ public:
 
     void process (juce::AudioBuffer<float>& buffer, int numSamples)
     {
-        // Filter
+        // ========== Filter stage ==========
         if (filterOn)
         {
-            svfFilter.setCutoffFrequency (filterCutoff);
-            svfFilter.setResonance (filterRes);
+            const int ch = juce::jmin (2, buffer.getNumChannels());
+            if (filterWetBuffer.getNumSamples() < numSamples)
+                filterWetBuffer.setSize (2, numSamples, false, false, true);
 
-            switch (filterType)
+            // Copy dry → wet scratch
+            for (int c = 0; c < ch; ++c)
+                filterWetBuffer.copyFrom (c, 0, buffer, c, 0, numSamples);
+
+            if (CombFilter::isCombType (filterType))
             {
-                case 0: svfFilter.setType (juce::dsp::StateVariableTPTFilterType::lowpass); break;
-                case 1: svfFilter.setType (juce::dsp::StateVariableTPTFilterType::highpass); break;
-                case 2: svfFilter.setType (juce::dsp::StateVariableTPTFilterType::bandpass); break;
+                combFilter.setType (filterType);
+                combFilter.setCombFreq (filterCombFreq);
+                combFilter.setCutoff (filterCutoff);
+                combFilter.setResonance (filterRes);
+                combFilter.setDrive (filterDrive);
+                combFilter.process (filterWetBuffer, numSamples);
+            }
+            else
+            {
+                svfFilter.setCutoffFrequency (filterCutoff);
+                svfFilter.setResonance (filterRes);
+                switch (filterType)
+                {
+                    case 0: svfFilter.setType (juce::dsp::StateVariableTPTFilterType::lowpass);  break;
+                    case 1: svfFilter.setType (juce::dsp::StateVariableTPTFilterType::highpass); break;
+                    case 2: svfFilter.setType (juce::dsp::StateVariableTPTFilterType::bandpass); break;
+                    default: break;
+                }
+
+                for (int i = 0; i < numSamples; ++i)
+                {
+                    float l = filterWetBuffer.getSample (0, i);
+                    float r = ch > 1 ? filterWetBuffer.getSample (1, i) : l;
+                    filterWetBuffer.setSample (0, i, svfFilter.processSample (0, l));
+                    if (ch > 1)
+                        filterWetBuffer.setSample (1, i, svfFilter.processSample (1, r));
+                }
+
+                // Optional gentle drive on standard filter types too
+                if (filterDrive > 0.01f)
+                {
+                    float gainUp = 1.0f + filterDrive * 4.0f;
+                    float gainDn = 1.0f / std::sqrt (gainUp);
+                    for (int c = 0; c < ch; ++c)
+                    {
+                        float* d = filterWetBuffer.getWritePointer (c);
+                        for (int i = 0; i < numSamples; ++i)
+                            d[i] = std::tanh (d[i] * gainUp) * gainDn;
+                    }
+                }
             }
 
-            for (int i = 0; i < numSamples; ++i)
+            // Apply pan on wet signal (equal-power)
+            if (ch > 1)
             {
-                float l = buffer.getSample (0, i);
-                float r = buffer.getNumChannels() > 1 ? buffer.getSample (1, i) : l;
-                buffer.setSample (0, i, svfFilter.processSample (0, l));
-                if (buffer.getNumChannels() > 1)
-                    buffer.setSample (1, i, svfFilter.processSample (1, r));
+                float panNorm = 0.5f * (filterPan + 1.0f); // -1..1 -> 0..1
+                float lGain = std::cos (panNorm * juce::MathConstants<float>::halfPi);
+                float rGain = std::sin (panNorm * juce::MathConstants<float>::halfPi);
+                float* wetL = filterWetBuffer.getWritePointer (0);
+                float* wetR = filterWetBuffer.getWritePointer (1);
+                for (int i = 0; i < numSamples; ++i)
+                {
+                    float m = 0.5f * (wetL[i] + wetR[i]);
+                    wetL[i] = m * lGain * 1.41421356f; // restore energy vs mono mix
+                    wetR[i] = m * rGain * 1.41421356f;
+                }
+            }
+
+            // Dry/wet mix into buffer
+            float wet = juce::jlimit (0.0f, 1.0f, filterMix);
+            float dry = 1.0f - wet;
+            for (int c = 0; c < ch; ++c)
+            {
+                float* dst = buffer.getWritePointer (c);
+                const float* src = filterWetBuffer.getReadPointer (c);
+                for (int i = 0; i < numSamples; ++i)
+                    dst[i] = dst[i] * dry + src[i] * wet;
             }
         }
 
-        // Bitcrusher
+        // ========== Bitcrusher ==========
         if (crushOn)
         {
             crusher.setBits (crushBits);
@@ -72,7 +140,7 @@ public:
             }
         }
 
-        // Delay
+        // ========== Delay ==========
         if (delayOn && maxDelaySamples > 0)
         {
             int delaySamps = juce::jlimit (1, maxDelaySamples - 1,
@@ -98,15 +166,15 @@ public:
             }
         }
 
-        // Reverb
+        // ========== Reverb ==========
         if (reverbOn)
         {
             juce::Reverb::Parameters rp;
-            rp.roomSize = reverbSize;
-            rp.damping = reverbDamp;
-            rp.wetLevel = reverbMix;
-            rp.dryLevel = 1.0f - reverbMix;
-            rp.width = 1.0f;
+            rp.roomSize   = reverbSize;
+            rp.damping    = reverbDamp;
+            rp.wetLevel   = reverbMix;
+            rp.dryLevel   = 1.0f - reverbMix;
+            rp.width      = 1.0f;
             rp.freezeMode = 0.0f;
             reverb.setParameters (rp);
 
@@ -120,30 +188,35 @@ public:
     void reset()
     {
         svfFilter.reset();
+        combFilter.reset();
         crusher.reset();
         delayBuffer.clear();
         delayWritePos = 0;
         reverb.reset();
     }
 
-    // Filter setters
+    // ---- Filter setters ----
     void setFilterEnabled (bool on)   { filterOn = on; }
     void setFilterType (int t)        { filterType = t; }
     void setFilterCutoff (float hz)   { filterCutoff = hz; }
     void setFilterResonance (float r) { filterRes = r; }
+    void setFilterPan (float p)       { filterPan = juce::jlimit (-1.0f, 1.0f, p); }
+    void setFilterDrive (float d)     { filterDrive = juce::jlimit (0.0f, 1.0f, d); }
+    void setFilterCombFreq (float f)  { filterCombFreq = juce::jlimit (20.0f, 5000.0f, f); }
+    void setFilterMix (float m)       { filterMix = juce::jlimit (0.0f, 1.0f, m); }
 
-    // Bitcrusher setters
+    // ---- Bitcrusher setters ----
     void setCrushEnabled (bool on)    { crushOn = on; }
     void setCrushBits (float b)       { crushBits = b; }
     void setCrushRate (float r)       { crushRate = r; }
 
-    // Delay setters
+    // ---- Delay setters ----
     void setDelayEnabled (bool on)    { delayOn = on; }
     void setDelayTime (float ms)      { delayTime = ms; }
     void setDelayFeedback (float f)   { delayFeedback = f; }
     void setDelayMix (float m)        { delayMix = m; }
 
-    // Reverb setters
+    // ---- Reverb setters ----
     void setReverbEnabled (bool on)   { reverbOn = on; }
     void setReverbSize (float s)      { reverbSize = s; }
     void setReverbDamp (float d)      { reverbDamp = d; }
@@ -154,10 +227,16 @@ private:
 
     // Filter
     juce::dsp::StateVariableTPTFilter<float> svfFilter;
-    bool filterOn = false;
-    int filterType = 0;
+    CombFilter combFilter;
+    juce::AudioBuffer<float> filterWetBuffer;
+    bool  filterOn = false;
+    int   filterType = 0;
     float filterCutoff = 1000.0f;
     float filterRes = 0.707f;
+    float filterPan = 0.0f;
+    float filterDrive = 0.0f;
+    float filterCombFreq = 220.0f;
+    float filterMix = 1.0f;
 
     // Bitcrusher
     Bitcrusher crusher;
