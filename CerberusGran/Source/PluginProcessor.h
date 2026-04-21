@@ -49,8 +49,8 @@ public:
     juce::AudioProcessorValueTreeState apvts;
 
     // Grid info for waveform display (set during updateParametersFromAPVTS)
-    std::atomic<float> syncGridMs { 0.0f };    // 0 = no grid
-    std::atomic<bool> anySyncActive { false };
+    std::atomic<float> syncGridMs { 0.0f };
+    std::atomic<bool>  anySyncActive { false };
 
 private:
     void updateParametersFromAPVTS();
@@ -61,7 +61,7 @@ private:
     juce::AudioFormatManager formatManager;
     juce::AudioThumbnailCache thumbnailCache { 5 };
 
-    std::atomic<int> sourceMode { 0 };
+    std::atomic<int>  sourceMode { 0 };
     std::atomic<bool> freeze { false };
 
     juce::AudioBuffer<float> sampleBufferA, sampleBufferB;
@@ -93,14 +93,21 @@ private:
         std::atomic<float>* shape = nullptr;
         std::atomic<float>* reverse = nullptr;
         std::atomic<float>* gain = nullptr;
-        // FX chain
+
+        // Filter (extended)
         std::atomic<float>* filterOn = nullptr;
         std::atomic<float>* filterType = nullptr;
         std::atomic<float>* filterCutoff = nullptr;
         std::atomic<float>* filterRes = nullptr;
+        std::atomic<float>* filterPan = nullptr;
+        std::atomic<float>* filterDrive = nullptr;
+        std::atomic<float>* filterCombFreq = nullptr;
+        std::atomic<float>* filterMix = nullptr;
+
         std::atomic<float>* crushOn = nullptr;
         std::atomic<float>* crushBits = nullptr;
         std::atomic<float>* crushRate = nullptr;
+
         std::atomic<float>* delayOn = nullptr;
         std::atomic<float>* delayTimeMode = nullptr;
         std::atomic<float>* delayTime = nullptr;
@@ -108,6 +115,7 @@ private:
         std::atomic<float>* delaySyncType = nullptr;
         std::atomic<float>* delayFeedback = nullptr;
         std::atomic<float>* delayMix = nullptr;
+
         std::atomic<float>* reverbOn = nullptr;
         std::atomic<float>* reverbSize = nullptr;
         std::atomic<float>* reverbDamp = nullptr;

@@ -28,11 +28,15 @@ public:
     void setSyncGrid (bool on, float gridMs) { syncGrid = on; syncGridMs = gridMs; }
     void setGainDb (float db)         { gainLinear = juce::Decibels::decibelsToGain (db); }
 
-    // FX chain setters (forwarded to fxChain)
+    // FX chain setters — forwarded to fxChain
     void setFilterEnabled (bool on)   { fxChain.setFilterEnabled (on); }
     void setFilterType (int t)        { fxChain.setFilterType (t); }
     void setFilterCutoff (float hz)   { fxChain.setFilterCutoff (hz); }
     void setFilterResonance (float r) { fxChain.setFilterResonance (r); }
+    void setFilterPan (float p)       { fxChain.setFilterPan (p); }
+    void setFilterDrive (float d)     { fxChain.setFilterDrive (d); }
+    void setFilterCombFreq (float f)  { fxChain.setFilterCombFreq (f); }
+    void setFilterMix (float m)       { fxChain.setFilterMix (m); }
 
     void setCrushEnabled (bool on)    { fxChain.setCrushEnabled (on); }
     void setCrushBits (float b)       { fxChain.setCrushBits (b); }
@@ -76,9 +80,9 @@ private:
     float lengthMs = 200.0f;
     float pitchSt = 0.0f;
     float shape = 0.0f;
-    float reversePct = 0.0f;  // 0-100%
+    float reversePct = 0.0f;
     bool syncGrid = false;
-    float syncGridMs = 0.0f;  // grid spacing in ms (one subdivision)
+    float syncGridMs = 0.0f;
     float gainLinear = 1.0f;
 
     double sampleRate = 44100.0;
@@ -87,7 +91,6 @@ private:
     GrainPool grainPool;
     juce::Random rng;
 
-    // Per-head intermediate buffer and FX chain
     juce::AudioBuffer<float> headBuffer;
     HeadFXChain fxChain;
 };

@@ -2,6 +2,7 @@
 #include <JuceHeader.h>
 #include <set>
 #include "RotaryKnob.h"
+#include "FilterResponseDisplay.h"
 
 enum class FXType { None = -1, Filter = 0, Bitcrush = 1, Delay = 2, Reverb = 3 };
 
@@ -35,7 +36,6 @@ public:
     FXSlotCard (juce::AudioProcessorValueTreeState& apvts, int headIndex, juce::Colour accent)
         : apvtsRef (apvts), head (headIndex), accentColour (accent)
     {
-        // FX type selector (id 1=None, 2=Filter, 3=Bitcrush, 4=Delay, 5=Reverb)
         fxSelector.addItem ("None", 1);
         fxSelector.addItem ("Filter", 2);
         fxSelector.addItem ("Bitcrush", 3);
@@ -49,18 +49,15 @@ public:
         fxSelector.onChange = [this] { onFxTypeChanged(); };
         addAndMakeVisible (fxSelector);
 
-        // Chevron (painted triangle)
         chevronBtn.setColour (juce::TextButton::buttonColourId, juce::Colours::transparentBlack);
         chevronBtn.setColour (juce::TextButton::textColourOffId, juce::Colours::transparentBlack);
         chevronBtn.onClick = [this] { setCollapsed (!collapsed); };
         addAndMakeVisible (chevronBtn);
 
-        // Active dot (circular toggle, uses head accent colour)
         activeDot.accentColour = accent;
         addAndMakeVisible (activeDot);
         activeDot.onClick = [this] { toggleActive(); };
 
-        // Create ALL knob sets upfront (hidden by default)
         createFilterKnobs();
         createCrushKnobs();
         createDelayKnobs();
@@ -77,7 +74,6 @@ public:
         if (auto* parent = getParentComponent())
         {
             parent->resized();
-            // Also update the viewport in the grandparent (EngineColumn)
             if (auto* grandparent = parent->getParentComponent())
                 grandparent->resized();
         }
@@ -86,10 +82,8 @@ public:
     bool isCollapsed() const { return collapsed; }
     FXType getSelectedType() const { return selectedType; }
 
-    // Callback when this slot's selection changes
     std::function<void()> onSelectionChanged;
 
-    // Disable items in dropdown that are used by other slots
     void setDisabledEffects (const std::set<FXType>& usedByOthers)
     {
         for (int i = 0; i < fxSelector.getNumItems(); ++i)
@@ -105,7 +99,10 @@ public:
     int getIdealHeight() const
     {
         if (selectedType == FXType::None) return kHeaderHeight;
-        return collapsed ? kHeaderHeight : (kHeaderHeight + kBodyHeight);
+        if (collapsed) return kHeaderHeight;
+
+        int bodyH = (selectedType == FXType::Filter) ? kFilterBodyHeight : kBodyHeight;
+        return kHeaderHeight + bodyH;
     }
 
     void paint (juce::Graphics& g) override
@@ -116,9 +113,6 @@ public:
         g.setColour (juce::Colour (0xff3A3A40));
         g.drawRoundedRectangle (b.reduced (0.5f), 4.0f, 0.5f);
 
-        // ActiveDot component handles its own painting
-
-        // Chevron triangle (only if an FX is selected)
         if (selectedType != FXType::None)
         {
             float cx = static_cast<float> (getWidth()) - 16.0f;
@@ -126,15 +120,9 @@ public:
 
             juce::Path tri;
             if (collapsed)
-            {
-                // Down triangle ▼
                 tri.addTriangle (cx - 5.0f, cy - 3.0f, cx + 5.0f, cy - 3.0f, cx, cy + 4.0f);
-            }
             else
-            {
-                // Up triangle ▲
                 tri.addTriangle (cx - 5.0f, cy + 3.0f, cx + 5.0f, cy + 3.0f, cx, cy - 4.0f);
-            }
             g.setColour (juce::Colour (0xff888888));
             g.fillPath (tri);
         }
@@ -145,13 +133,8 @@ public:
         auto area = getLocalBounds();
         auto header = area.removeFromTop (kHeaderHeight);
 
-        // Active dot click area
         activeDot.setBounds (header.removeFromLeft (28));
-
-        // Chevron click area
         chevronBtn.setBounds (header.removeFromRight (28));
-
-        // FX selector fills remaining header
         fxSelector.setBounds (header.reduced (2, 2));
 
         if (collapsed || selectedType == FXType::None) return;
@@ -162,10 +145,34 @@ public:
         {
             case FXType::Filter:
             {
-                int knobW = body.getWidth() / 3;
-                filterKnobs[0]->setBounds (body.removeFromLeft (knobW));
-                filterKnobs[1]->setBounds (body.removeFromLeft (knobW));
-                filterTypeBox.setBounds (body.withHeight (20).withY (body.getCentreY() - 10));
+                // Row 0 (22px): filter type button (full width)
+                // Row 1 (flex) : frequency response display
+                // Row 2 (106px): 6 knobs in a 3x2 grid
+                auto typeRow = body.removeFromTop (22);
+                filterTypeButton.setBounds (typeRow.reduced (1, 1));
+                body.removeFromTop (3);
+
+                const int knobRowH = 52;
+                const int knobBlock = knobRowH * 2 + 2;
+                auto knobArea = body.removeFromBottom (knobBlock);
+
+                body.removeFromBottom (3);
+                if (filterResponseDisplay)
+                    filterResponseDisplay->setBounds (body);
+
+                auto row1 = knobArea.removeFromTop (knobRowH);
+                knobArea.removeFromTop (2);
+                auto row2 = knobArea;
+
+                int colW1 = row1.getWidth() / 3;
+                filterKnobs[0]->setBounds (row1.removeFromLeft (colW1));   // Cutoff
+                filterKnobs[1]->setBounds (row1.removeFromLeft (colW1));   // Res
+                filterKnobs[2]->setBounds (row1);                          // Pan
+
+                int colW2 = row2.getWidth() / 3;
+                filterKnobs[3]->setBounds (row2.removeFromLeft (colW2));   // Drive
+                filterKnobs[4]->setBounds (row2.removeFromLeft (colW2));   // CombFrq
+                filterKnobs[5]->setBounds (row2);                          // Mix
                 break;
             }
             case FXType::Bitcrush:
@@ -178,7 +185,6 @@ public:
             case FXType::Delay:
             {
                 bool delaySync = (delayTimeModeBox.getSelectedId() == 2);
-                // Mode selector row at top of body
                 auto modeRow = body.removeFromTop (20);
                 auto modeLeft = modeRow.removeFromLeft (modeRow.getWidth() / 2);
                 delayTimeModeBox.setBounds (modeLeft.reduced (1, 0));
@@ -209,8 +215,9 @@ public:
     }
 
 private:
-    static constexpr int kHeaderHeight = 30;
-    static constexpr int kBodyHeight = 96;
+    static constexpr int kHeaderHeight     = 30;
+    static constexpr int kBodyHeight       = 96;
+    static constexpr int kFilterBodyHeight = 210;
 
     juce::AudioProcessorValueTreeState& apvtsRef;
     int head;
@@ -223,34 +230,39 @@ private:
     juce::TextButton chevronBtn;
     ActiveDot activeDot;
 
-private:
+    // Filter: 6 knobs + custom type button (avoids JUCE ComboBoxAttachment
+    // off-by-one bug when using addSectionHeading)
+    std::array<RotaryKnob*, 6> filterKnobs {};
+    juce::TextButton filterTypeButton;
+    std::unique_ptr<juce::ParameterAttachment> filterTypeAttach;
+    std::unique_ptr<FilterResponseDisplay> filterResponseDisplay;
+    int currentFilterTypeIdx = 0;
 
-    // Filter knobs
-    std::array<RotaryKnob*, 2> filterKnobs {};
-    juce::ComboBox filterTypeBox;
-
-    // Crush knobs
     std::array<RotaryKnob*, 2> crushKnobs {};
 
-    // Delay knobs + sync controls
     std::array<RotaryKnob*, 3> delayKnobs {};
     juce::ComboBox delayTimeModeBox;
     RotaryKnob* delaySyncDivKnob = nullptr;
     juce::ComboBox delaySyncTypeBox;
 
-    // Reverb knobs
     std::array<RotaryKnob*, 3> reverbKnobs {};
 
-    // Owned knobs
     juce::OwnedArray<RotaryKnob> allKnobs;
 
     using SliderAttach = juce::AudioProcessorValueTreeState::SliderAttachment;
     using ComboAttach  = juce::AudioProcessorValueTreeState::ComboBoxAttachment;
 
     juce::OwnedArray<SliderAttach> sliderAttachments;
-    std::unique_ptr<ComboAttach> filterTypeAttach;
     std::unique_ptr<ComboAttach> delayTimeModeAttach, delaySyncTypeAttach;
     std::unique_ptr<SliderAttach> delaySyncDivAttach;
+
+    static juce::StringArray filterTypeNames()
+    {
+        return { "LP", "HP", "BP",
+                 "Comb+ LP", "Comb+ BP",
+                 "Comb- LP", "Comb- BP",
+                 "Scream LP", "Scream BP" };
+    }
 
     juce::String paramId (const juce::String& name) const
     {
@@ -271,15 +283,133 @@ private:
 
     void createFilterKnobs()
     {
-        filterKnobs[0] = makeKnob ("Cut", "", "filterCutoff");
-        filterKnobs[1] = makeKnob ("Res", "", "filterRes");
+        filterKnobs[0] = makeKnob ("Cutoff",  " Hz", "filterCutoff");
+        filterKnobs[1] = makeKnob ("Res",     "",    "filterRes");
+        filterKnobs[2] = makeKnob ("Pan",     "",    "filterPan");
+        filterKnobs[3] = makeKnob ("Drive",   "",    "filterDrive");
+        filterKnobs[4] = makeKnob ("CombFrq", " Hz", "filterCombFreq");
+        filterKnobs[5] = makeKnob ("Mix",     "",    "filterMix");
 
-        filterTypeBox.addItemList ({ "LP", "HP", "BP" }, 1);
-        filterTypeBox.setColour (juce::ComboBox::outlineColourId, juce::Colours::transparentBlack);
-        filterTypeBox.setColour (juce::ComboBox::backgroundColourId, juce::Colours::transparentBlack);
-        filterTypeBox.setVisible (false);
-        addAndMakeVisible (filterTypeBox);
-        filterTypeAttach = std::make_unique<ComboAttach> (apvtsRef, paramId ("filterType"), filterTypeBox);
+        // Pan readout: C / L xx / R xx
+        filterKnobs[2]->getSlider().textFromValueFunction = [] (double v)
+        {
+            if (std::abs (v) < 0.005) return juce::String ("C");
+            if (v < 0) return "L " + juce::String (static_cast<int> (std::round (-v * 100.0)));
+            return "R " + juce::String (static_cast<int> (std::round (v * 100.0)));
+        };
+        filterKnobs[2]->getSlider().updateText();
+
+        filterKnobs[3]->getSlider().textFromValueFunction = [] (double v)
+        { return juce::String (static_cast<int> (std::round (v * 100.0))) + "%"; };
+        filterKnobs[3]->getSlider().updateText();
+
+        filterKnobs[5]->getSlider().textFromValueFunction = [] (double v)
+        { return juce::String (static_cast<int> (std::round (v * 100.0))) + "%"; };
+        filterKnobs[5]->getSlider().updateText();
+
+        // Filter type: TextButton + PopupMenu (Serum-style grouped menu)
+        // We do NOT use ComboBoxAttachment here, because JUCE has a known
+        // off-by-one bug when a ComboBox has addSectionHeading() entries
+        // while bound to a choice parameter via ComboBoxAttachment.
+        // Instead, use ParameterAttachment for value sync and a popup menu
+        // for selection — complete control, no bug.
+        filterTypeButton.setColour (juce::TextButton::buttonColourId,  juce::Colour (0xff2A2A30));
+        filterTypeButton.setColour (juce::TextButton::buttonOnColourId, juce::Colour (0xff2A2A30));
+        filterTypeButton.setColour (juce::TextButton::textColourOffId,  juce::Colour (0xffcccccc));
+        filterTypeButton.setColour (juce::TextButton::textColourOnId,   juce::Colour (0xffcccccc));
+        filterTypeButton.onClick = [this] { showFilterTypeMenu(); };
+        filterTypeButton.setVisible (false);
+        addAndMakeVisible (filterTypeButton);
+
+        if (auto* p = apvtsRef.getParameter (paramId ("filterType")))
+        {
+            filterTypeAttach = std::make_unique<juce::ParameterAttachment> (
+                *p,
+                [this] (float denormValue)
+                {
+                    const auto names = filterTypeNames();
+                    int idx = juce::jlimit (0, names.size() - 1,
+                                            static_cast<int> (std::round (denormValue)));
+                    DBG ("  [Attach CB] denormValue=" << denormValue
+                         << "  -> idx=" << idx << "  (" << names[idx] << ")"
+                         << "  head=" << head);
+                    currentFilterTypeIdx = idx;
+                    filterTypeButton.setButtonText (names[idx]);
+                },
+                nullptr);
+            filterTypeAttach->sendInitialUpdate();
+        }
+
+        // Frequency response visualiser
+        filterResponseDisplay = std::make_unique<FilterResponseDisplay> (apvtsRef, head, accentColour);
+        filterResponseDisplay->setVisible (false);
+        addAndMakeVisible (filterResponseDisplay.get());
+    }
+
+    void showFilterTypeMenu()
+    {
+        juce::PopupMenu m;
+        const auto names = filterTypeNames();
+
+        // PopupMenu headers/separators are purely cosmetic — item IDs are
+        // controlled by us so there is no interaction with JUCE's
+        // ComboBoxAttachment off-by-one issue.
+        m.addSectionHeader ("Standard");
+        for (int i = 0; i < 3; ++i)
+            m.addItem (i + 1, names[i], true, i == currentFilterTypeIdx);
+
+        m.addSeparator();
+        m.addSectionHeader ("Comb");
+        for (int i = 3; i < 7; ++i)
+            m.addItem (i + 1, names[i], true, i == currentFilterTypeIdx);
+
+        m.addSeparator();
+        m.addSectionHeader ("Dist");
+        for (int i = 7; i < 9; ++i)
+            m.addItem (i + 1, names[i], true, i == currentFilterTypeIdx);
+
+        auto opts = juce::PopupMenu::Options()
+                       .withTargetComponent (&filterTypeButton)
+                       .withMinimumWidth (filterTypeButton.getWidth());
+
+        m.showMenuAsync (opts, [this] (int result)
+        {
+            DBG ("=== showFilterTypeMenu callback ===");
+            DBG ("  menu result = " << result);
+            if (result <= 0) { DBG ("  (no selection, aborting)"); return; }
+            int idx = result - 1;
+            DBG ("  target idx = " << idx << "  (" << filterTypeNames()[idx] << ")");
+
+            auto* p = apvtsRef.getParameter (paramId ("filterType"));
+            DBG ("  getParameter returned: " << (p ? "non-null" : "NULL"));
+            if (p == nullptr) return;
+
+            auto* choiceP = dynamic_cast<juce::AudioParameterChoice*> (p);
+            DBG ("  dynamic_cast<AudioParameterChoice*>: " << (choiceP ? "SUCCESS" : "FAILED"));
+            if (choiceP != nullptr)
+                DBG ("  current index BEFORE write = " << choiceP->getIndex());
+
+            if (choiceP)
+            {
+                p->beginChangeGesture();
+                *choiceP = idx;
+                p->endChangeGesture();
+                DBG ("  current index AFTER write = " << choiceP->getIndex());
+            }
+            else
+            {
+                const int numChoices = p->getAllValueStrings().size();
+                const float normalised = juce::jlimit (0.0f, 1.0f,
+                    (static_cast<float> (idx) + 0.5f) / static_cast<float> (juce::jmax (1, numChoices)));
+                DBG ("  fallback path, normalised = " << normalised);
+                p->beginChangeGesture();
+                p->setValueNotifyingHost (normalised);
+                p->endChangeGesture();
+            }
+
+            DBG ("  currentFilterTypeIdx (UI cache) = " << currentFilterTypeIdx);
+            DBG ("  button text = '" << filterTypeButton.getButtonText() << "'");
+        });
     }
 
     void createCrushKnobs()
@@ -294,7 +424,6 @@ private:
         delayKnobs[1] = makeKnob ("Fdbk", "", "delayFeedback");
         delayKnobs[2] = makeKnob ("Mix", "", "delayMix");
 
-        // Delay time mode (Time / Sync)
         delayTimeModeBox.addItemList ({ "Time", "Sync" }, 1);
         delayTimeModeBox.setColour (juce::ComboBox::backgroundColourId, juce::Colours::transparentBlack);
         delayTimeModeBox.setColour (juce::ComboBox::outlineColourId, juce::Colours::transparentBlack);
@@ -303,7 +432,6 @@ private:
         addAndMakeVisible (delayTimeModeBox);
         delayTimeModeAttach = std::make_unique<ComboAttach> (apvtsRef, paramId ("delayTimeMode"), delayTimeModeBox);
 
-        // Delay sync div (stepped knob)
         delaySyncDivKnob = new RotaryKnob ("Div", "");
         delaySyncDivKnob->setAccentColour (accentColour);
         delaySyncDivKnob->getSlider().setRange (0, 5, 1);
@@ -318,7 +446,6 @@ private:
         allKnobs.add (delaySyncDivKnob);
         delaySyncDivAttach = std::make_unique<SliderAttach> (apvtsRef, paramId ("delaySyncDiv"), delaySyncDivKnob->getSlider());
 
-        // Delay sync type
         delaySyncTypeBox.addItemList ({ "Norm", "Trip", "Dot" }, 1);
         delaySyncTypeBox.setColour (juce::ComboBox::backgroundColourId, juce::Colours::transparentBlack);
         delaySyncTypeBox.setColour (juce::ComboBox::outlineColourId, juce::Colours::transparentBlack);
@@ -337,7 +464,8 @@ private:
     void hideAllKnobs()
     {
         for (auto* k : allKnobs) k->setVisible (false);
-        filterTypeBox.setVisible (false);
+        filterTypeButton.setVisible (false);
+        if (filterResponseDisplay) filterResponseDisplay->setVisible (false);
         delayTimeModeBox.setVisible (false);
         delaySyncTypeBox.setVisible (false);
     }
@@ -351,7 +479,8 @@ private:
         {
             case FXType::Filter:
                 for (auto* k : filterKnobs) if (k) k->setVisible (true);
-                filterTypeBox.setVisible (true);
+                filterTypeButton.setVisible (true);
+                if (filterResponseDisplay) filterResponseDisplay->setVisible (true);
                 break;
             case FXType::Bitcrush:
                 for (auto* k : crushKnobs) if (k) k->setVisible (true);
@@ -360,11 +489,11 @@ private:
             {
                 bool delaySync = (delayTimeModeBox.getSelectedId() == 2);
                 delayTimeModeBox.setVisible (true);
-                delayKnobs[0]->setVisible (!delaySync); // Time knob hidden in sync
+                delayKnobs[0]->setVisible (!delaySync);
                 delaySyncDivKnob->setVisible (delaySync);
                 delaySyncTypeBox.setVisible (delaySync);
-                delayKnobs[1]->setVisible (true); // Fdbk always
-                delayKnobs[2]->setVisible (true); // Mix always
+                delayKnobs[1]->setVisible (true);
+                delayKnobs[2]->setVisible (true);
                 break;
             }
             case FXType::Reverb:
@@ -376,7 +505,6 @@ private:
 
     void onFxTypeChanged()
     {
-        // Turn off the previously selected effect
         if (selectedType != FXType::None)
         {
             juce::String prevName;
@@ -392,14 +520,12 @@ private:
                 p->setValueNotifyingHost (0.0f);
         }
 
-        // Map new selection: 1=None, 2=Filter, 3=Bitcrush, 4=Delay, 5=Reverb
         int sel = fxSelector.getSelectedId();
         if (sel <= 1)
             selectedType = FXType::None;
         else
             selectedType = static_cast<FXType> (sel - 2);
 
-        // Auto-enable the new effect
         if (selectedType != FXType::None)
         {
             isActive = true;
@@ -426,14 +552,12 @@ private:
 
         updateKnobVisibility();
 
-        // Auto-expand when selecting an FX, collapse when None
         if (selectedType == FXType::None && !collapsed)
             setCollapsed (true);
         else if (selectedType != FXType::None && collapsed)
             setCollapsed (false);
         else
         {
-            // Already expanded — just re-layout to show new knobs
             resized();
             if (auto* parent = getParentComponent())
             {
@@ -442,7 +566,6 @@ private:
             }
         }
 
-        // Notify panel to update available effects in sibling slots
         if (onSelectionChanged)
             onSelectionChanged();
     }

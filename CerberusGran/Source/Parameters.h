@@ -23,7 +23,7 @@ inline juce::AudioProcessorValueTreeState::ParameterLayout createParameterLayout
         "sourceMode", "Source",
         juce::StringArray { "Live", "File" }, 0));
 
-    // Per-head: core granular params only
+    // Per-head
     for (int h = 0; h < kNumHeads; ++h)
     {
         auto id = [h] (const juce::String& name) -> juce::String
@@ -92,13 +92,21 @@ inline juce::AudioProcessorValueTreeState::ParameterLayout createParameterLayout
             id ("gain"), nm ("Gain"),
             juce::NormalisableRange<float> (-24.0f, 6.0f, 0.1f), 0.0f));
 
-        // FX Chain: Filter
+        // =====================================================================
+        // FX Chain: Filter (extended with Serum-style comb variants)
+        // =====================================================================
         params.push_back (std::make_unique<juce::AudioParameterBool> (
             id ("filterOn"), nm ("Filter On"), false));
 
+        // 0..2 = standard, 3..8 = comb variants
         params.push_back (std::make_unique<juce::AudioParameterChoice> (
             id ("filterType"), nm ("Filter Type"),
-            juce::StringArray { "LP", "HP", "BP" }, 0));
+            juce::StringArray {
+                "LP", "HP", "BP",
+                "Comb+ LP", "Comb+ BP",
+                "Comb- LP", "Comb- BP",
+                "Scream LP", "Scream BP"
+            }, 0));
 
         params.push_back (std::make_unique<juce::AudioParameterFloat> (
             id ("filterCutoff"), nm ("Filter Cutoff"),
@@ -108,7 +116,29 @@ inline juce::AudioProcessorValueTreeState::ParameterLayout createParameterLayout
             id ("filterRes"), nm ("Filter Res"),
             juce::NormalisableRange<float> (0.1f, 10.0f, 0.01f, 0.5f), 0.707f));
 
+        // Stereo pan for filter output (-1 left .. +1 right)
+        params.push_back (std::make_unique<juce::AudioParameterFloat> (
+            id ("filterPan"), nm ("Filter Pan"),
+            juce::NormalisableRange<float> (-1.0f, 1.0f, 0.001f), 0.0f));
+
+        // Drive amount 0..1 — saturation in feedback loop (0=clean)
+        params.push_back (std::make_unique<juce::AudioParameterFloat> (
+            id ("filterDrive"), nm ("Filter Drive"),
+            juce::NormalisableRange<float> (0.0f, 1.0f, 0.001f), 0.0f));
+
+        // Comb tuning frequency (20..5000 Hz, log). ~= pitch of the comb.
+        params.push_back (std::make_unique<juce::AudioParameterFloat> (
+            id ("filterCombFreq"), nm ("Comb Freq"),
+            juce::NormalisableRange<float> (20.0f, 5000.0f, 0.1f, 0.3f), 220.0f));
+
+        // Dry/wet mix for the entire filter stage
+        params.push_back (std::make_unique<juce::AudioParameterFloat> (
+            id ("filterMix"), nm ("Filter Mix"),
+            juce::NormalisableRange<float> (0.0f, 1.0f, 0.001f), 1.0f));
+
+        // =====================================================================
         // FX Chain: Bitcrusher
+        // =====================================================================
         params.push_back (std::make_unique<juce::AudioParameterBool> (
             id ("crushOn"), nm ("Crush On"), false));
 
@@ -120,7 +150,9 @@ inline juce::AudioProcessorValueTreeState::ParameterLayout createParameterLayout
             id ("crushRate"), nm ("Crush Rate"),
             juce::NormalisableRange<float> (1.0f, 50.0f, 1.0f), 1.0f));
 
+        // =====================================================================
         // FX Chain: Delay
+        // =====================================================================
         params.push_back (std::make_unique<juce::AudioParameterBool> (
             id ("delayOn"), nm ("Delay On"), false));
 
@@ -148,7 +180,9 @@ inline juce::AudioProcessorValueTreeState::ParameterLayout createParameterLayout
             id ("delayMix"), nm ("Delay Mix"),
             juce::NormalisableRange<float> (0.0f, 1.0f, 0.01f), 0.5f));
 
+        // =====================================================================
         // FX Chain: Reverb
+        // =====================================================================
         params.push_back (std::make_unique<juce::AudioParameterBool> (
             id ("reverbOn"), nm ("Reverb On"), false));
 
