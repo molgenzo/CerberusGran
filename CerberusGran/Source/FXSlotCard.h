@@ -131,10 +131,21 @@ public:
             {
                 bool delaySync = (delayTimeModeBox.getSelectedId() == 2);
                 auto modeRow = body.removeFromTop (18);
-                auto modeLeft = modeRow.removeFromLeft (modeRow.getWidth() / 2);
-                delayTimeModeBox.setBounds (modeLeft.reduced (1, 0));
+
+                auto ppArea = modeRow.removeFromRight (28);
+                delayPingPongButton.setBounds (ppArea.reduced (1, 0));
+
                 if (delaySync)
+                {
+                    auto modeLeft = modeRow.removeFromLeft (modeRow.getWidth() / 2);
+                    delayTimeModeBox.setBounds (modeLeft.reduced (1, 0));
                     delaySyncTypeBox.setBounds (modeRow.reduced (1, 0));
+                }
+                else
+                {
+                    auto modeLeft = modeRow.removeFromLeft (modeRow.getWidth() / 2);
+                    delayTimeModeBox.setBounds (modeLeft.reduced (1, 0));
+                }
 
                 body.removeFromTop (2);
                 int knobW = body.getWidth() / 3;
@@ -182,6 +193,7 @@ private:
     juce::ComboBox delayTimeModeBox;
     RotaryKnob* delaySyncDivKnob = nullptr;
     juce::ComboBox delaySyncTypeBox;
+    juce::TextButton delayPingPongButton;
 
     // Reverb knobs
     std::array<RotaryKnob*, 3> reverbKnobs {};
@@ -191,11 +203,13 @@ private:
 
     using SliderAttach = juce::AudioProcessorValueTreeState::SliderAttachment;
     using ComboAttach  = juce::AudioProcessorValueTreeState::ComboBoxAttachment;
+    using ButtonAttach = juce::AudioProcessorValueTreeState::ButtonAttachment;
 
     juce::OwnedArray<SliderAttach> sliderAttachments;
     std::unique_ptr<ComboAttach> filterTypeAttach;
     std::unique_ptr<ComboAttach> delayTimeModeAttach, delaySyncTypeAttach;
     std::unique_ptr<SliderAttach> delaySyncDivAttach;
+    std::unique_ptr<ButtonAttach> delayPingPongAttach;
 
     juce::String paramId (const juce::String& name) const
     {
@@ -267,6 +281,16 @@ private:
         delaySyncTypeBox.setVisible (false);
         addAndMakeVisible (delaySyncTypeBox);
         delaySyncTypeAttach = std::make_unique<ComboAttach> (apvtsRef, paramId ("delaySyncType"), delaySyncTypeBox);
+        delayPingPongButton.setButtonText ("PP");
+        delayPingPongButton.setClickingTogglesState (true);
+        delayPingPongButton.setTooltip ("Ping-Pong stereo delay");
+        delayPingPongButton.setColour (juce::TextButton::buttonColourId, juce::Colour (0xff2A2A30));
+        delayPingPongButton.setColour (juce::TextButton::buttonOnColourId, accentColour);
+        delayPingPongButton.setColour (juce::TextButton::textColourOffId, juce::Colour (0xff888888));
+        delayPingPongButton.setColour (juce::TextButton::textColourOnId, juce::Colours::white);
+        delayPingPongButton.setVisible (false);
+        addAndMakeVisible (delayPingPongButton);
+        delayPingPongAttach = std::make_unique<ButtonAttach> (apvtsRef, paramId ("delayPingPong"), delayPingPongButton);
     }
 
     void createReverbKnobs()
@@ -282,6 +306,7 @@ private:
         filterTypeBox.setVisible (false);
         delayTimeModeBox.setVisible (false);
         delaySyncTypeBox.setVisible (false);
+        delayPingPongButton.setVisible (false);
     }
 
     void updateKnobVisibility()
@@ -307,6 +332,7 @@ private:
                 delaySyncTypeBox.setVisible (delaySync);
                 delayKnobs[1]->setVisible (true);
                 delayKnobs[2]->setVisible (true);
+                delayPingPongButton.setVisible (true);
                 break;
             }
             case FXType::Reverb:

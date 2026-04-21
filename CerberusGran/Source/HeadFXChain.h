@@ -78,26 +78,54 @@ public:
             int delaySamps = juce::jlimit (1, maxDelaySamples - 1,
                 static_cast<int> (delayTime * 0.001f * static_cast<float> (sampleRate)));
 
-            for (int i = 0; i < numSamples; ++i)
+                 
+            if (pingPongOn && buffer.getNumChannels() >= 2)
             {
-                int readPos = delayWritePos - delaySamps;
-                if (readPos < 0) readPos += maxDelaySamples;
-
-                for (int ch = 0; ch < juce::jmin (2, buffer.getNumChannels()); ++ch)
+                for (int i = 0; i < numSamples; ++i)
                 {
-                    float dry = buffer.getSample (ch, i);
-                    float delayed = delayBuffer.getSample (ch, readPos);
+                    int readPos = delayWritePos - delaySamps;
+                    if (readPos < 0) readPos += maxDelaySamples;
 
-                    delayBuffer.setSample (ch, delayWritePos, dry + delayed * delayFeedback);
+                         
+                    float dryL = buffer.getSample (0, i);
+                    float dryR = buffer.getSample (1, i);
+                    float delayedL = delayBuffer.getSample (0, readPos);
+                    float delayedR = delayBuffer.getSample (1, readPos);
 
-                    buffer.setSample (ch, i, dry * (1.0f - delayMix) + delayed * delayMix);
+
+                    float dryMono = (dryL + dryR) * 0.5f;
+                    delayBuffer.setSample (0, delayWritePos, dryMono + delayedR * delayFeedback);
+                    delayBuffer.setSample (1, delayWritePos,           delayedL * delayFeedback);
+
+                    buffer.setSample (0, i, dryL * (1.0f - delayMix) + delayedL * delayMix);
+                    buffer.setSample (1, i, dryR * (1.0f - delayMix) + delayedR * delayMix);
+
+                    if (++delayWritePos >= maxDelaySamples)
+                                delayWritePos = 0;
                 }
+            }
+            else
+            {
+                for (int i = 0; i < numSamples; ++i)
+                {
+                    int readPos = delayWritePos - delaySamps;
+                    if (readPos < 0) readPos += maxDelaySamples;
 
-                if (++delayWritePos >= maxDelaySamples)
-                    delayWritePos = 0;
+                    for (int ch = 0; ch < juce::jmin (2, buffer.getNumChannels()); ++ch)
+                    {
+                        float dry = buffer.getSample (ch, i);
+                        float delayed = delayBuffer.getSample (ch, readPos);
+
+                        delayBuffer.setSample (ch, delayWritePos, dry + delayed * delayFeedback);
+
+                        buffer.setSample (ch, i, dry * (1.0f - delayMix) + delayed * delayMix);
+                    }
+
+                    if (++delayWritePos >= maxDelaySamples)
+                                delayWritePos = 0;
+                }
             }
         }
-
         // Reverb
         if (reverbOn)
         {
@@ -142,6 +170,7 @@ public:
     void setDelayTime (float ms)      { delayTime = ms; }
     void setDelayFeedback (float f)   { delayFeedback = f; }
     void setDelayMix (float m)        { delayMix = m; }
+    void setDelayPingPong (bool on) { pingPongOn = on; }
 
     // Reverb setters
     void setReverbEnabled (bool on)   { reverbOn = on; }
@@ -173,6 +202,7 @@ private:
     float delayTime = 250.0f;
     float delayFeedback = 0.3f;
     float delayMix = 0.5f;
+    bool pingPongOn = false;
 
     // Reverb
     juce::Reverb reverb;

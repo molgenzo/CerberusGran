@@ -147,6 +147,9 @@ inline juce::AudioProcessorValueTreeState::ParameterLayout createParameterLayout
         params.push_back (std::make_unique<juce::AudioParameterFloat> (
             id ("delayMix"), nm ("Delay Mix"),
             juce::NormalisableRange<float> (0.0f, 1.0f, 0.01f), 0.5f));
+        
+        params.push_back (std::make_unique<juce::AudioParameterBool> (
+            id ("delayPingPong"), nm ("Delay Ping-Pong"), false));
 
         // FX Chain: Reverb
         params.push_back (std::make_unique<juce::AudioParameterBool> (
