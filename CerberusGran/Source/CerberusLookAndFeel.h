@@ -59,7 +59,10 @@ public:
     void positionComboBoxText (juce::ComboBox& box, juce::Label& label) override
     {
         label.setBounds (6, 0, box.getWidth() - 16, box.getHeight());
-        label.setFont (juce::Font ("Avenir", 12.0f, juce::Font::bold));
+        if (box.getComponentID() == "sourceModeBigCombo")
+            label.setFont (juce::Font ("Avenir", 16.0f, juce::Font::bold));
+        else
+            label.setFont (juce::Font ("Avenir", 12.0f, juce::Font::bold));
     }
 
     juce::Font getPopupMenuFont() override
@@ -77,9 +80,10 @@ public:
         return juce::Font ("Avenir", 13.0f, juce::Font::bold);
     }
 
-    juce::Font getLabelFont (juce::Label&) override
+    juce::Font getLabelFont (juce::Label& label) override
     {
-        return juce::Font ("Avenir", 12.0f, juce::Font::bold);
+        // Respect whatever font has been set on the label
+        return label.getFont();
     }
 
     juce::Component* getComboBoxButton (juce::ComboBox&) { return nullptr; }
@@ -87,7 +91,7 @@ public:
     juce::Label* createSliderTextBox (juce::Slider& slider) override
     {
         auto* label = juce::LookAndFeel_V4::createSliderTextBox (slider);
-        label->setFont (juce::Font ("Avenir", 10.0f, juce::Font::bold));
+        label->setFont (juce::Font ("Avenir", 12.0f, juce::Font::bold));
         label->setColour (juce::Label::textColourId, juce::Colour (0xffaaaaaa));
         return label;
     }

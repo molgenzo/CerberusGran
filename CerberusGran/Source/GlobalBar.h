@@ -21,13 +21,17 @@ public:
 
         // Plugin name
         nameLabel.setText ("Pocket Granules", juce::dontSendNotification);
-        nameLabel.setFont (juce::Font ("Avenir", 16.0f, juce::Font::bold));
+        nameLabel.setFont (juce::Font ("Avenir", 30.0f, juce::Font::bold));
         nameLabel.setColour (juce::Label::textColourId, juce::Colour (0xffeeeeee));
+        nameLabel.setJustificationType (juce::Justification::centredLeft);
+        nameLabel.setBorderSize (juce::BorderSize<int> (0));
         addAndMakeVisible (nameLabel);
 
-        // Source mode selector — same height/font as other buttons
-        sourceModeBox.addItemList ({ "Live", "File" }, 1);
-        sourceModeBox.setColour (juce::ComboBox::backgroundColourId, juce::Colour (0xff2E2E34));
+        // Source mode selector — transparent background, just text + arrow, big font
+        sourceModeBox.addItemList ({ "Live mode", "File mode" }, 1);
+        sourceModeBox.setColour (juce::ComboBox::backgroundColourId, juce::Colours::transparentBlack);
+        sourceModeBox.setColour (juce::ComboBox::textColourId, juce::Colour (0xffcccccc));
+        sourceModeBox.setComponentID ("sourceModeBigCombo");
         sourceModeBox.onChange = [this] { onModeChanged(); };
         addAndMakeVisible (sourceModeBox);
         sourceModeAttach = std::make_unique<ComboAttach> (apvts, "sourceMode", sourceModeBox);
@@ -99,19 +103,13 @@ public:
         float badgeY = getHeight() * 0.5f - badgeSize * 0.5f;
         g.setColour (badgeColour);
         g.fillRoundedRectangle (badgeX, badgeY, badgeSize, badgeSize, 7.0f);
-        g.setColour (juce::Colour (0xff1A1A1E));
-        g.setFont (juce::Font ("Avenir", 14.0f, juce::Font::bold));
-        g.drawText (juce::String (currentHead + 1),
-                    static_cast<int> (badgeX), static_cast<int> (badgeY),
-                    static_cast<int> (badgeSize), static_cast<int> (badgeSize),
-                    juce::Justification::centred);
 
-        // Labels above sliders
-        g.setColour (juce::Colour (0xff999999));
-        g.setFont (juce::Font ("Avenir", 9.0f, juce::Font::plain));
-        g.drawText ("Gain", gainSlider.getBounds().translated (0, -11).withHeight (10),
+        // Labels above sliders — bigger text, tighter to slider
+        g.setColour (juce::Colour (0xffbbbbbb));
+        g.setFont (juce::Font ("Avenir", 12.0f, juce::Font::bold));
+        g.drawText ("Gain", gainSlider.getBounds().translated (0, -13).withHeight (12),
                     juce::Justification::centredLeft);
-        g.drawText ("D/W", mixSlider.getBounds().translated (0, -11).withHeight (10),
+        g.drawText ("D/W", mixSlider.getBounds().translated (0, -13).withHeight (12),
                     juce::Justification::centredLeft);
     }
 
@@ -126,23 +124,29 @@ public:
         prevBtn.setBounds (area.removeFromLeft (24).withHeight (btnH).withY (cy));
         area.removeFromLeft (34); // badge space
         nextBtn.setBounds (area.removeFromLeft (24).withHeight (btnH).withY (cy));
-        area.removeFromLeft (8);
+        area.removeFromLeft (2);
 
-        // Plugin name
-        nameLabel.setBounds (area.removeFromLeft (140).withHeight (h));
-        area.removeFromLeft (4);
+        // Plugin name — measure text width so combo can sit tightly next to it
+        int nameW = juce::Font ("Avenir", 30.0f, juce::Font::bold)
+                        .getStringWidth (nameLabel.getText()) + 4;
+        nameLabel.setBounds (area.removeFromLeft (nameW).withHeight (h));
 
-        // Mode selector
-        sourceModeBox.setBounds (area.removeFromLeft (60).withHeight (btnH).withY (cy));
-
-        // Right side: horizontal bar sliders
+        // Right side — layout from right: [Gain] [gap] [D/W], then [Live mode] just left of Gain
         int barW = 70;
         int barH = 16;
         int barGap = 8;
-        int barY = cy + (btnH - barH) / 2 + 4; // vertically centered, nudged down for label above
+        int barY = cy + (btnH - barH) / 2 + 4;
 
         mixSlider.setBounds (area.getRight() - barW, barY, barW, barH);
         gainSlider.setBounds (area.getRight() - barW * 2 - barGap, barY, barW, barH);
+
+        // Mode selector placed just left of the Gain slider
+        juce::Font modeFont ("Avenir", 16.0f, juce::Font::bold);
+        int modeTextW = modeFont.getStringWidth (sourceModeBox.getText());
+        if (modeTextW == 0) modeTextW = modeFont.getStringWidth ("Live mode");
+        int modeBoxW = modeTextW + 32;
+        int modeBoxX = gainSlider.getX() - modeBoxW - 10;
+        sourceModeBox.setBounds (modeBoxX, cy - 2, modeBoxW, 28);
     }
 
 private:
@@ -164,6 +168,7 @@ private:
 
     void onModeChanged()
     {
+        resized(); // re-measure text width for any selection
         bool isFile = (sourceModeBox.getSelectedId() == 2);
         if (isFile)
         {
