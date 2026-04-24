@@ -5,6 +5,7 @@
 #include "WaveformDisplay.h"
 #include "EngineColumn.h"
 #include "GlobalBar.h"
+#include "UI/AdvancedPanel.h"
 
 class CerberusGranAudioProcessorEditor : public juce::AudioProcessorEditor,
                                          public juce::Timer
@@ -27,10 +28,14 @@ private:
     WaveformDisplay waveformDisplay;
     juce::OwnedArray<EngineColumn> columns;
     GlobalBar globalBar;
+    AdvancedPanel advancedPanel;
 
     int currentHeadIndex = 0;
+    bool advancedVisible = false;
+    static constexpr int kAdvancedHeight = 240;
 
     void switchToHead (int headIndex);
+    void toggleAdvanced (bool on);
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (CerberusGranAudioProcessorEditor)
 };

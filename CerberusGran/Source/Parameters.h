@@ -20,6 +20,45 @@ inline juce::AudioProcessorValueTreeState::ParameterLayout createParameterLayout
         "sourceMode", "Source",
         juce::StringArray { "Live", "File" }, 0));
 
+    // === Modulation — LFO ===
+    params.push_back (std::make_unique<juce::AudioParameterFloat> (
+        "lfo_rate", "LFO Rate",
+        juce::NormalisableRange<float> (0.01f, 20.0f, 0.01f, 0.4f), 1.0f));
+
+    params.push_back (std::make_unique<juce::AudioParameterChoice> (
+        "lfo_shape", "LFO Shape",
+        juce::StringArray { "Sine", "Triangle", "Saw Up", "Saw Down", "Square", "S&H" }, 0));
+
+    params.push_back (std::make_unique<juce::AudioParameterFloat> (
+        "lfo_depth", "LFO Depth",
+        juce::NormalisableRange<float> (0.0f, 1.0f, 0.001f), 1.0f));
+
+    params.push_back (std::make_unique<juce::AudioParameterBool> (
+        "lfo_bipolar", "LFO Bipolar", true));
+
+    params.push_back (std::make_unique<juce::AudioParameterFloat> (
+        "lfo_phase", "LFO Phase",
+        juce::NormalisableRange<float> (0.0f, 1.0f, 0.001f), 0.0f));
+
+    // === Modulation — Step Sequencer ===
+    params.push_back (std::make_unique<juce::AudioParameterFloat> (
+        "seq_rate", "Seq Rate",
+        juce::NormalisableRange<float> (0.01f, 20.0f, 0.01f, 0.4f), 2.0f));
+
+    params.push_back (std::make_unique<juce::AudioParameterInt> (
+        "seq_length", "Seq Length", 1, 16, 16));
+
+    params.push_back (std::make_unique<juce::AudioParameterChoice> (
+        "seq_playmode", "Seq Play Mode",
+        juce::StringArray { "Forward", "Reverse", "Ping-pong", "Random" }, 0));
+
+    params.push_back (std::make_unique<juce::AudioParameterBool> (
+        "seq_bipolar", "Seq Bipolar", false));
+
+    params.push_back (std::make_unique<juce::AudioParameterFloat> (
+        "seq_smooth", "Seq Smooth",
+        juce::NormalisableRange<float> (0.0f, 1.0f, 0.001f), 0.0f));
+
     // Per-head: core granular params only
     for (int h = 0; h < kNumHeads; ++h)
     {

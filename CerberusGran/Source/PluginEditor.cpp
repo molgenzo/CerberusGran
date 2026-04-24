@@ -4,7 +4,8 @@ CerberusGranAudioProcessorEditor::CerberusGranAudioProcessorEditor (CerberusGran
     : juce::AudioProcessorEditor (&p),
       audioProcessor (p),
       waveformDisplay (p, headColours),
-      globalBar (p.apvts, headColours)
+      globalBar (p.apvts, headColours),
+      advancedPanel (p)
 {
     setLookAndFeel (&cerberusLnf);
 
@@ -20,18 +21,28 @@ CerberusGranAudioProcessorEditor::CerberusGranAudioProcessorEditor (CerberusGran
 
     for (int i = 0; i < kNumCols; ++i)
     {
-        auto* col = new EngineColumn (p.apvts, i, headColours[i]);
+        auto* col = new EngineColumn (p.apvts, i, headColours[i], &p.modEngine);
         columns.add (col);
         addAndMakeVisible (col);
-        col->setVisible (i == 0); // only show head 0 initially
+        col->setVisible (i == 0);
+
+        col->onAdvancedToggled = [this] (bool on) { toggleAdvanced (on); };
     }
 
     addAndMakeVisible (globalBar);
 
-    // Wire head navigation from GlobalBar
+    // Advanced panel hidden until toggled
+    addChildComponent (advancedPanel);
+    advancedPanel.setVisible (false);
+
+    advancedPanel.onAssignToggled = [this] (int srcIdx, bool on) {
+        // Broadcast assign mode to all EngineColumns (only the visible one will respond to mouse)
+        for (auto* col : columns)
+            col->setAssignMode (srcIdx, on);
+    };
+
     globalBar.onHeadChanged = [this] (int newHead) { switchToHead (newHead); };
 
-    // Tight sizing: topBar(48) + waveform(80) + labels(24) + fxPanel(2*118+4=240) + padding(24) = 416
     setSize (620, 416);
     startTimerHz (30);
 }
@@ -51,13 +62,20 @@ void CerberusGranAudioProcessorEditor::resized()
 {
     auto area = getLocalBounds();
 
+    // Advanced panel pinned to bottom when visible
+    if (advancedVisible)
+    {
+        auto advArea = area.removeFromBottom (kAdvancedHeight);
+        advancedPanel.setBounds (advArea);
+    }
+
     // Global bar at top
     globalBar.setBounds (area.removeFromTop (48));
 
     // Waveform below global bar
     waveformDisplay.setBounds (area.removeFromTop (80).reduced (8, 4));
 
-    // Single engine column fills remaining space
+    // Engine column fills remaining space
     auto columnArea = area.reduced (2, 2);
     for (int i = 0; i < kNumCols; ++i)
         columns[i]->setBounds (columnArea);
@@ -80,4 +98,17 @@ void CerberusGranAudioProcessorEditor::switchToHead (int headIndex)
     currentHeadIndex = headIndex;
     columns[currentHeadIndex]->setVisible (true);
     waveformDisplay.setActiveHead (headIndex);
+}
+
+void CerberusGranAudioProcessorEditor::toggleAdvanced (bool on)
+{
+    advancedVisible = on;
+    advancedPanel.setVisible (on);
+
+    // Sync all EngineColumn Advanced buttons to match the new state
+    for (auto* col : columns)
+        col->advancedBtn.setToggleState (on, juce::dontSendNotification);
+
+    int baseH = 416;
+    setSize (getWidth(), on ? baseH + kAdvancedHeight : baseH);
 }

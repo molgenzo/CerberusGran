@@ -15,6 +15,17 @@ CerberusGranAudioProcessor::CerberusGranAudioProcessor()
     mixParam        = apvts.getRawParameterValue ("mix");
     sourceModeParam = apvts.getRawParameterValue ("sourceMode");
 
+    lfoRateParam     = apvts.getRawParameterValue ("lfo_rate");
+    lfoShapeParam    = apvts.getRawParameterValue ("lfo_shape");
+    lfoDepthParam    = apvts.getRawParameterValue ("lfo_depth");
+    lfoBipolarParam  = apvts.getRawParameterValue ("lfo_bipolar");
+    lfoPhaseParam    = apvts.getRawParameterValue ("lfo_phase");
+    seqRateParam     = apvts.getRawParameterValue ("seq_rate");
+    seqLengthParam   = apvts.getRawParameterValue ("seq_length");
+    seqPlayModeParam = apvts.getRawParameterValue ("seq_playmode");
+    seqBipolarParam  = apvts.getRawParameterValue ("seq_bipolar");
+    seqSmoothParam   = apvts.getRawParameterValue ("seq_smooth");
+
     for (int h = 0; h < kNumHeads; ++h)
     {
         auto id = [h] (const juce::String& name) { return "head" + juce::String (h) + "_" + name; };
@@ -54,6 +65,16 @@ CerberusGranAudioProcessor::CerberusGranAudioProcessor()
         hp.reverbSize    = apvts.getRawParameterValue (id ("reverbSize"));
         hp.reverbDamp    = apvts.getRawParameterValue (id ("reverbDamp"));
         hp.reverbMix     = apvts.getRawParameterValue (id ("reverbMix"));
+
+        // Cache modulation-target param IDs once to avoid per-block string allocs
+        hp.idPosition = id ("position");
+        hp.idSpread   = id ("spread");
+        hp.idRate     = id ("rate");
+        hp.idLength   = id ("length");
+        hp.idPitch    = id ("pitch");
+        hp.idShape    = id ("shape");
+        hp.idReverse  = id ("reverse");
+        hp.idGain     = id ("gain");
     }
 }
 
@@ -78,10 +99,24 @@ void CerberusGranAudioProcessor::prepareToPlay (double sampleRate, int samplesPe
     ringBuffer.prepare (2, ringSize);
     grainEngine.prepare (sampleRate, samplesPerBlock);
     dryBuffer.setSize (2, samplesPerBlock);
+    modEngine.prepare (sampleRate);
 }
 
 void CerberusGranAudioProcessor::updateParametersFromAPVTS()
 {
+    // Push modulation source parameters to engine
+    modEngine.lfo.setRateHz   (lfoRateParam->load());
+    modEngine.lfo.setShape    (static_cast<int> (lfoShapeParam->load()));
+    modEngine.lfo.setDepth    (lfoDepthParam->load());
+    modEngine.lfo.setBipolar  (lfoBipolarParam->load() >= 0.5f);
+    modEngine.lfo.setPhaseOff (lfoPhaseParam->load());
+
+    modEngine.stepSeq.setRateHz   (seqRateParam->load());
+    modEngine.stepSeq.setLength   (static_cast<int> (seqLengthParam->load()));
+    modEngine.stepSeq.setPlayMode (static_cast<int> (seqPlayModeParam->load()));
+    modEngine.stepSeq.setBipolar  (seqBipolarParam->load() >= 0.5f);
+    modEngine.stepSeq.setSmooth   (seqSmoothParam->load());
+
     float gainDb = masterGainParam->load();
     grainEngine.setMasterGain (gainDb <= -59.9f ? 0.0f : juce::Decibels::decibelsToGain (gainDb));
 
@@ -104,15 +139,15 @@ void CerberusGranAudioProcessor::updateParametersFromAPVTS()
         auto& head = grainEngine.getHead (h);
 
         head.setEnabled (hp.enable->load() >= 0.5f);
-        head.setPosition (hp.position->load());
-        head.setSpread (hp.spread->load());
+        head.setPosition (modEngine.applyMod (hp.idPosition, hp.position->load(), 0.0f, 100.0f));
+        head.setSpread   (modEngine.applyMod (hp.idSpread,   hp.spread->load(),   0.0f, 50.0f));
         // Rate: Time mode uses raw ms, Sync mode calculates from tempo
         float effectiveRateMs = hp.rate->load();
         {
             int rateMode = static_cast<int> (hp.rateMode->load());
             if (rateMode == 0) // Time
             {
-                effectiveRateMs = hp.rate->load();
+                effectiveRateMs = modEngine.applyMod (hp.idRate, hp.rate->load(), 5.0f, 500.0f);
                 head.setRate (effectiveRateMs);
             }
             else // Sync
@@ -170,12 +205,12 @@ void CerberusGranAudioProcessor::updateParametersFromAPVTS()
         }
         else
         {
-            head.setLength (hp.length->load());
+            head.setLength (modEngine.applyMod (hp.idLength, hp.length->load(), 5.0f, 1000.0f));
         }
-        head.setPitchSemitones (hp.pitch->load());
-        head.setShape (hp.shape->load());
-        head.setReversePct (hp.reverse->load());
-        head.setGainDb (hp.gain->load());
+        head.setPitchSemitones (modEngine.applyMod (hp.idPitch,   hp.pitch->load(),   -24.0f, 24.0f));
+        head.setShape          (modEngine.applyMod (hp.idShape,   hp.shape->load(),   0.0f,   1.0f));
+        head.setReversePct     (modEngine.applyMod (hp.idReverse, hp.reverse->load(), 0.0f,   100.0f));
+        head.setGainDb         (modEngine.applyMod (hp.idGain,    hp.gain->load(),    -24.0f, 6.0f));
 
         // FX chain
         head.setFilterEnabled (hp.filterOn->load() >= 0.5f);
@@ -237,6 +272,9 @@ void CerberusGranAudioProcessor::processBlock (juce::AudioBuffer<float>& buffer,
     if (!freeze.load (std::memory_order_relaxed))
         ringBuffer.write (buffer, buffer.getNumSamples());
 
+    // Advance modulation sources once per block, then feed mod into param updates
+    modEngine.tick (buffer.getNumSamples());
+
     updateParametersFromAPVTS();
 
     bool liveMode = (getSourceMode() == AudioSourceMode::Live);
@@ -288,14 +326,72 @@ void CerberusGranAudioProcessor::getStateInformation (juce::MemoryBlock& destDat
 {
     auto state = apvts.copyState();
     std::unique_ptr<juce::XmlElement> xml (state.createXml());
+
+    // Append modState: step values + connections
+    if (xml != nullptr)
+    {
+        auto* modXml = xml->createNewChildElement ("modState");
+
+        auto* stepsXml = modXml->createNewChildElement ("steps");
+        for (int i = 0; i < StepSequencer::kMaxSteps; ++i)
+        {
+            auto* s = stepsXml->createNewChildElement ("step");
+            s->setAttribute ("idx", i);
+            s->setAttribute ("v", (double) modEngine.stepSeq.getStepValue (i));
+        }
+
+        auto* connsXml = modXml->createNewChildElement ("connections");
+        for (const auto& c : modEngine.getAllConnections())
+        {
+            auto* cx = connsXml->createNewChildElement ("conn");
+            cx->setAttribute ("src",  c.sourceIndex);
+            cx->setAttribute ("dest", c.destParamId);
+            cx->setAttribute ("amt",  (double) c.amount);
+        }
+    }
+
     copyXmlToBinary (*xml, destData);
 }
 
 void CerberusGranAudioProcessor::setStateInformation (const void* data, int sizeInBytes)
 {
     std::unique_ptr<juce::XmlElement> xml (getXmlFromBinary (data, sizeInBytes));
-    if (xml != nullptr && xml->hasTagName (apvts.state.getType()))
-        apvts.replaceState (juce::ValueTree::fromXml (*xml));
+    if (xml == nullptr || ! xml->hasTagName (apvts.state.getType()))
+        return;
+
+    // Extract modState BEFORE replacing APVTS state (APVTS may not preserve unknown children)
+    std::unique_ptr<juce::XmlElement> modXmlCopy;
+    if (auto* modXml = xml->getChildByName ("modState"))
+        modXmlCopy = std::make_unique<juce::XmlElement> (*modXml);
+
+    apvts.replaceState (juce::ValueTree::fromXml (*xml));
+
+    if (modXmlCopy == nullptr) return;
+
+    // Restore step values
+    if (auto* stepsXml = modXmlCopy->getChildByName ("steps"))
+    {
+        for (auto* s : stepsXml->getChildIterator())
+        {
+            int idx = s->getIntAttribute ("idx", -1);
+            if (idx < 0 || idx >= StepSequencer::kMaxSteps) continue;
+            modEngine.stepSeq.setStepValue (idx, (float) s->getDoubleAttribute ("v", 0.0));
+        }
+    }
+
+    // Restore connections
+    modEngine.clearConnections();
+    if (auto* connsXml = modXmlCopy->getChildByName ("connections"))
+    {
+        for (auto* c : connsXml->getChildIterator())
+        {
+            int src = c->getIntAttribute ("src", -1);
+            juce::String dest = c->getStringAttribute ("dest");
+            float amt = (float) c->getDoubleAttribute ("amt", 0.0);
+            if (src >= 0 && dest.isNotEmpty())
+                modEngine.addOrUpdateConnection (src, dest, amt);
+        }
+    }
 }
 
 juce::AudioProcessorEditor* CerberusGranAudioProcessor::createEditor()

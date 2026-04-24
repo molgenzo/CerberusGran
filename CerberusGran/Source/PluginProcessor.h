@@ -2,6 +2,7 @@
 #include <JuceHeader.h>
 #include "RingBuffer.h"
 #include "GrainEngine.h"
+#include "Modulation/ModulationEngine.h"
 
 enum class AudioSourceMode { Live = 0, File = 1 };
 
@@ -47,6 +48,7 @@ public:
     juce::AudioThumbnailCache& getThumbnailCache() { return thumbnailCache; }
 
     juce::AudioProcessorValueTreeState apvts;
+    ModulationEngine modEngine;
 
     // Grid info for waveform display (set during updateParametersFromAPVTS)
     std::atomic<float> syncGridMs { 0.0f };    // 0 = no grid
@@ -75,6 +77,18 @@ private:
     std::atomic<float>* masterGainParam = nullptr;
     std::atomic<float>* mixParam = nullptr;
     std::atomic<float>* sourceModeParam = nullptr;
+
+    // Modulation source param pointers
+    std::atomic<float>* lfoRateParam = nullptr;
+    std::atomic<float>* lfoShapeParam = nullptr;
+    std::atomic<float>* lfoDepthParam = nullptr;
+    std::atomic<float>* lfoBipolarParam = nullptr;
+    std::atomic<float>* lfoPhaseParam = nullptr;
+    std::atomic<float>* seqRateParam = nullptr;
+    std::atomic<float>* seqLengthParam = nullptr;
+    std::atomic<float>* seqPlayModeParam = nullptr;
+    std::atomic<float>* seqBipolarParam = nullptr;
+    std::atomic<float>* seqSmoothParam = nullptr;
 
     struct HeadParamPtrs
     {
@@ -112,6 +126,10 @@ private:
         std::atomic<float>* reverbSize = nullptr;
         std::atomic<float>* reverbDamp = nullptr;
         std::atomic<float>* reverbMix = nullptr;
+
+        // Cached param IDs for modulation lookup (modulatable grain params)
+        juce::String idPosition, idSpread, idRate, idLength;
+        juce::String idPitch, idShape, idReverse, idGain;
     };
 
     std::array<HeadParamPtrs, kNumHeads> headParams;

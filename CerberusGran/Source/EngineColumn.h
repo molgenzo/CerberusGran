@@ -3,18 +3,31 @@
 #include "RotaryKnob.h"
 #include "GrainShapeKnob.h"
 #include "FXChainPanel.h"
+#include "Modulation/ModulationEngine.h"
 
 class EngineColumn : public juce::Component
 {
 public:
     static inline juce::Colour sectionPurple { 0xff8B5CF6 };
 
-    EngineColumn (juce::AudioProcessorValueTreeState& apvts, int headIndex, juce::Colour accent)
+    EngineColumn (juce::AudioProcessorValueTreeState& apvts, int headIndex, juce::Colour accent,
+                  ModulationEngine* modEngineIn = nullptr)
         : index (headIndex), accentColour (accent),
-          fxPanel (apvts, headIndex, accent)
+          fxPanel (apvts, headIndex, accent),
+          modEngine (modEngineIn)
     {
         auto id = [headIndex] (const juce::String& name)
         { return "head" + juce::String (headIndex) + "_" + name; };
+
+        // Cache modulatable param IDs keyed by card slot 0..7
+        cardParamIds[0] = id ("position");
+        cardParamIds[1] = id ("spread");
+        cardParamIds[2] = id ("rate");
+        cardParamIds[3] = id ("length");
+        cardParamIds[4] = id ("pitch");
+        cardParamIds[5] = id ("shape");
+        cardParamIds[6] = id ("gain");
+        cardParamIds[7] = id ("reverse");
 
         enableBtn.getProperties().set ("accentColour", (juce::int64) accent.getARGB());
         addAndMakeVisible (enableBtn);
@@ -28,6 +41,19 @@ public:
         freezeBtn.setColour (juce::TextButton::textColourOnId, juce::Colour (0xff1A1A1E));
         addAndMakeVisible (freezeBtn);
         freezeAttach = std::make_unique<ButtonAttach> (apvts, id ("freeze"), freezeBtn);
+
+        // Advanced button — sits in FX Chain label row
+        advancedBtn.setButtonText ("Advanced");
+        advancedBtn.setClickingTogglesState (true);
+        advancedBtn.setColour (juce::TextButton::buttonColourId,   juce::Colour (0xff2E2E34));
+        advancedBtn.setColour (juce::TextButton::buttonOnColourId, juce::Colour (0xffd8d8dc));
+        advancedBtn.setColour (juce::TextButton::textColourOffId,  juce::Colour (0xffaaaaaa));
+        advancedBtn.setColour (juce::TextButton::textColourOnId,   juce::Colour (0xff1A1A1E));
+        advancedBtn.onClick = [this] {
+            if (onAdvancedToggled)
+                onAdvancedToggled (advancedBtn.getToggleState());
+        };
+        addAndMakeVisible (advancedBtn);
 
         auto makeKnob = [&] (const juce::String& label, const juce::String& suffix,
                              const juce::String& paramName) -> RotaryKnob*
@@ -119,6 +145,61 @@ public:
         updateSizeLinkVisibility();
     }
 
+    // Enable/disable assignment mode — disables knob interaction so EngineColumn gets the clicks
+    void setAssignMode (int sourceIndex, bool active)
+    {
+        assignMode = active;
+        assignSource = sourceIndex;
+
+        // Disable knob click capture when in assign mode so we intercept drags
+        auto toggle = [active] (juce::Component* c)
+        { if (c) c->setInterceptsMouseClicks (!active, !active); };
+
+        toggle (posKnob); toggle (spreadKnob);
+        toggle (rateKnob); toggle (syncDivKnob);
+        toggle (lenKnob);  toggle (sizeRatioKnob);
+        toggle (pitchKnob); toggle (&shapeKnob);
+        toggle (gainKnob);  toggle (reverseKnob);
+
+        repaint();
+    }
+
+    void mouseDown (const juce::MouseEvent& e) override
+    {
+        if (! assignMode || modEngine == nullptr) return;
+        draggingCard = findCardAt (e.getPosition());
+        if (draggingCard >= 0)
+        {
+            float current = modEngine->getConnectionAmount (assignSource, cardParamIds[draggingCard]);
+            dragStartAmount = current;
+            dragStartY = e.y;
+        }
+    }
+
+    void mouseDrag (const juce::MouseEvent& e) override
+    {
+        if (! assignMode || modEngine == nullptr || draggingCard < 0) return;
+
+        // Drag up = positive amount, drag down = negative. 100 px = full range.
+        float delta = (dragStartY - e.y) / 100.0f;
+        float newAmount = juce::jlimit (-1.0f, 1.0f, dragStartAmount + delta);
+        modEngine->addOrUpdateConnection (assignSource, cardParamIds[draggingCard], newAmount);
+        repaint();
+    }
+
+    void mouseUp (const juce::MouseEvent&) override
+    {
+        if (assignMode && draggingCard >= 0)
+        {
+            // If amount snapped to ~zero, remove connection
+            float a = modEngine->getConnectionAmount (assignSource, cardParamIds[draggingCard]);
+            if (std::abs (a) < 0.01f)
+                modEngine->removeConnection (assignSource, cardParamIds[draggingCard]);
+            draggingCard = -1;
+            repaint();
+        }
+    }
+
     void paint (juce::Graphics& g) override
     {
         // Section labels
@@ -138,6 +219,53 @@ public:
             g.fillRoundedRectangle (r.toFloat(), 10.0f);
     }
 
+    void paintOverChildren (juce::Graphics& g) override
+    {
+        if (modEngine == nullptr) return;
+
+        // Draw modulation rings around each knob whenever a connection exists,
+        // plus an outline on all knobs when in assign mode.
+        for (size_t i = 0; i < knobCardBounds.size() && i < cardParamIds.size(); ++i)
+        {
+            auto card = knobCardBounds[i].toFloat();
+            // Ring circle roughly matches the knob's rendered circle — upper portion of card
+            auto conns = modEngine->getConnectionsForParam (cardParamIds[i]);
+
+            // Ring geometry — upper portion of card
+            float radius = juce::jmin (card.getWidth(), card.getHeight() - 30.0f) * 0.5f;
+            float cx = card.getCentreX();
+            float cy = card.getY() + radius + 4.0f;
+
+            if (assignMode)
+            {
+                // Dashed light outline on all knobs to cue "assignable"
+                juce::Colour col (0xff8B5CF6);
+                g.setColour (col.withAlpha (0.35f));
+                g.drawEllipse (cx - radius - 2.0f, cy - radius - 2.0f,
+                               (radius + 2.0f) * 2.0f, (radius + 2.0f) * 2.0f, 1.0f);
+            }
+
+            // Existing connection rings — draw an arc proportional to amount per source
+            float ringRadius = radius + 3.0f;
+            for (const auto& c : conns)
+            {
+                juce::Colour srcCol = (c.sourceIndex == ModulationEngine::kLFO)
+                    ? juce::Colour (0xff8B5CF6) // purple for LFO
+                    : juce::Colour (0xff2DD4BF); // teal for Seq
+                float amt = juce::jlimit (-1.0f, 1.0f, c.amount);
+                float startAngle = juce::MathConstants<float>::pi * 1.5f; // 12 o'clock
+                float sweep = amt * juce::MathConstants<float>::twoPi * 0.9f;
+
+                juce::Path arc;
+                arc.addCentredArc (cx, cy, ringRadius, ringRadius, 0.0f,
+                                   startAngle, startAngle + sweep, true);
+                g.setColour (srcCol.withAlpha (assignMode ? 0.9f : 0.6f));
+                g.strokePath (arc, juce::PathStrokeType (assignMode ? 3.0f : 2.0f));
+                ringRadius += 3.5f; // stack multiple connections
+            }
+        }
+    }
+
     void resized() override
     {
         auto area = getLocalBounds().reduced (6, 4);
@@ -150,9 +278,13 @@ public:
 
         // Label row
         auto grainLabelRow = grainHalf.removeFromTop (22);
-        fxLabelBounds = fxHalf.removeFromTop (22);
+        auto fxLabelRow = fxHalf.removeFromTop (22);
         grainHalf.removeFromTop (4);
         fxHalf.removeFromTop (4);
+
+        // FX label area: "FX Chain" on left + Advanced button on right
+        fxLabelBounds = fxLabelRow;
+        advancedBtn.setBounds (fxLabelRow.removeFromRight (80).withHeight (20).withY (fxLabelRow.getY()));
 
         grainLabelBounds = grainLabelRow.removeFromLeft (100);
         enableBtn.setBounds (grainLabelRow.removeFromRight (44).withHeight (20).withY (grainLabelRow.getY()));
@@ -231,9 +363,31 @@ private:
     juce::Rectangle<int> grainLabelBounds, fxLabelBounds;
     juce::Rectangle<int> grainPanelBounds, fxPanelBounds;
     std::vector<juce::Rectangle<int>> knobCardBounds;
+    std::array<juce::String, 8> cardParamIds;
+
+    ModulationEngine* modEngine = nullptr;
+    bool assignMode = false;
+    int  assignSource = 0;
+    int  draggingCard = -1;
+    float dragStartAmount = 0.0f;
+    int  dragStartY = 0;
+
+    int findCardAt (juce::Point<int> p) const
+    {
+        for (size_t i = 0; i < knobCardBounds.size(); ++i)
+            if (knobCardBounds[i].contains (p))
+                return static_cast<int> (i);
+        return -1;
+    }
 
     juce::ToggleButton enableBtn;
     juce::TextButton freezeBtn;
+
+public:
+    juce::TextButton advancedBtn;
+    std::function<void (bool)> onAdvancedToggled;
+
+private:
 
     RotaryKnob* posKnob = nullptr;
     RotaryKnob* spreadKnob = nullptr;
