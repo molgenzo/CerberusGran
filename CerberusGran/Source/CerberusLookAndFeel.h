@@ -110,13 +110,20 @@ public:
             ? juce::Colour (0xff888888)
             : juce::Colour (static_cast<juce::uint32> ((juce::int64) accentVar));
 
-        // Dark filled circle background
-        g.setColour (juce::Colour (0xff1E1E24));
+        // Filled circle background — defaults dark, can be overridden per-slider
+        auto bgVar = slider.getProperties() ["knobBgColour"];
+        juce::Colour bg = bgVar.isVoid()
+            ? juce::Colour (0xff1E1E24)
+            : juce::Colour (static_cast<juce::uint32> ((juce::int64) bgVar));
+        g.setColour (bg);
         g.fillEllipse (centreX - radius, centreY - radius, radius * 2.0f, radius * 2.0f);
 
-        // Outer circle outline
-        g.setColour (juce::Colour (0xff3A3A40));
-        g.drawEllipse (centreX - radius, centreY - radius, radius * 2.0f, radius * 2.0f, 0.75f);
+        // Outer circle outline — suppressed when slider opts out via "noKnobOutline"
+        if (! slider.getProperties().contains ("noKnobOutline"))
+        {
+            g.setColour (juce::Colour (0xff3A3A40));
+            g.drawEllipse (centreX - radius, centreY - radius, radius * 2.0f, radius * 2.0f, 0.75f);
+        }
 
         // Value arc
         float angle = rotaryStartAngle + sliderPos * (rotaryEndAngle - rotaryStartAngle);

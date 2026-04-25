@@ -46,6 +46,25 @@ public:
         slider.getProperties().set ("accentColour", (juce::int64) c.getARGB());
     }
 
+    // Override label/value colours (used by light-themed panels)
+    void setTextColours (juce::Colour labelCol, juce::Colour valueCol)
+    {
+        label.setColour (juce::Label::textColourId, labelCol);
+        valueLabel.setColour (juce::Label::textColourId, valueCol);
+    }
+
+    // Override the knob's filled circle colour (default is dark for the main UI)
+    void setKnobBgColour (juce::Colour c)
+    {
+        slider.getProperties().set ("knobBgColour", (juce::int64) c.getARGB());
+    }
+
+    void setKnobOutline (bool show)
+    {
+        if (show)  slider.getProperties().remove ("noKnobOutline");
+        else       slider.getProperties().set ("noKnobOutline", true);
+    }
+
     juce::Slider& getSlider() { return slider; }
 
     void resized() override

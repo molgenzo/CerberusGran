@@ -43,7 +43,7 @@ public:
         freezeAttach = std::make_unique<ButtonAttach> (apvts, id ("freeze"), freezeBtn);
 
         // Advanced button — sits in FX Chain label row
-        advancedBtn.setButtonText ("Advanced");
+        advancedBtn.setButtonText ("Mod");
         advancedBtn.setClickingTogglesState (true);
         advancedBtn.setColour (juce::TextButton::buttonColourId,   juce::Colour (0xff2E2E34));
         advancedBtn.setColour (juce::TextButton::buttonOnColourId, juce::Colour (0xffd8d8dc));

@@ -12,13 +12,22 @@ public:
           rateKnob ("Rate", " Hz"),
           smoothKnob ("Smooth", "")
     {
-        auto accent = juce::Colour (0xff8B5CF6);
+        auto accent   = juce::Colour (0xff33333a);
+        auto knobBg   = juce::Colour (0xffc8c8cd);
+        auto labelCol = juce::Colour (0xff222226);
+        auto valueCol = juce::Colour (0xff555560);
 
         rateKnob.setAccentColour (accent);
+        rateKnob.setKnobBgColour (knobBg);
+        rateKnob.setKnobOutline  (false);
+        rateKnob.setTextColours  (labelCol, valueCol);
         addAndMakeVisible (rateKnob);
         rateAttach = std::make_unique<SliderAttach> (p.apvts, "seq_rate", rateKnob.getSlider());
 
         smoothKnob.setAccentColour (accent);
+        smoothKnob.setKnobBgColour (knobBg);
+        smoothKnob.setKnobOutline  (false);
+        smoothKnob.setTextColours  (labelCol, valueCol);
         addAndMakeVisible (smoothKnob);
         smoothAttach = std::make_unique<SliderAttach> (p.apvts, "seq_smooth", smoothKnob.getSlider());
 
@@ -90,8 +99,8 @@ public:
             float barX = x + 1.5f;
             float barW = colW - 3.0f;
 
-            juce::Colour barCol = active ? juce::Colour (0xff8B5CF6) : juce::Colour (0xffaaaaaf);
-            if (isCurrent) barCol = barCol.brighter (0.2f);
+            juce::Colour barCol = active ? juce::Colour (0xff33333a) : juce::Colour (0xffaaaaaf);
+            if (isCurrent) barCol = barCol.brighter (0.4f);
 
             g.setColour (barCol.withAlpha (active ? 0.85f : 0.35f));
 
@@ -116,7 +125,7 @@ public:
             // Current step highlight
             if (isCurrent)
             {
-                g.setColour (juce::Colour (0xff8B5CF6).withAlpha (0.15f));
+                g.setColour (juce::Colour (0xff33333a).withAlpha (0.12f));
                 g.fillRect (x, (float) stepAreaBounds.getY(), colW, (float) stepAreaBounds.getHeight());
             }
 
@@ -133,13 +142,13 @@ public:
     {
         auto area = getLocalBounds().reduced (4);
 
-        // Top 65%: step display
-        int displayH = (int) (area.getHeight() * 0.65f);
+        // Top 55%: step display — matches LFO preview proportion
+        int displayH = (int) (area.getHeight() * 0.55f);
         stepAreaBounds = area.removeFromTop (displayH);
         area.removeFromTop (8);
 
-        // Bottom: controls row
-        int knobW = 60;
+        // Bottom: controls row — knob size matches LFO panel
+        int knobW = 70;
         rateKnob.setBounds   (area.removeFromLeft (knobW));
         area.removeFromLeft (4);
         smoothKnob.setBounds (area.removeFromLeft (knobW));
@@ -194,9 +203,9 @@ private:
     void stylePillButton (juce::TextButton& b)
     {
         b.setColour (juce::TextButton::buttonColourId,   juce::Colour (0xffd8d8dc));
-        b.setColour (juce::TextButton::buttonOnColourId, juce::Colour (0xff8B5CF6));
+        b.setColour (juce::TextButton::buttonOnColourId, juce::Colour (0xff33333a));
         b.setColour (juce::TextButton::textColourOffId,  juce::Colour (0xff555560));
-        b.setColour (juce::TextButton::textColourOnId,   juce::Colour (0xffffffff));
+        b.setColour (juce::TextButton::textColourOnId,   juce::Colour (0xffeeeeee));
     }
 
     using SliderAttach = juce::AudioProcessorValueTreeState::SliderAttachment;

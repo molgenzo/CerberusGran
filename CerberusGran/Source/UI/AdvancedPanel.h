@@ -38,9 +38,9 @@ public:
         assignBtn.setButtonText ("Assign");
         assignBtn.setClickingTogglesState (true);
         assignBtn.setColour (juce::TextButton::buttonColourId,   juce::Colour (0xffd8d8dc));
-        assignBtn.setColour (juce::TextButton::buttonOnColourId, juce::Colour (0xff8B5CF6));
+        assignBtn.setColour (juce::TextButton::buttonOnColourId, juce::Colour (0xff33333a));
         assignBtn.setColour (juce::TextButton::textColourOffId,  juce::Colour (0xff555560));
-        assignBtn.setColour (juce::TextButton::textColourOnId,   juce::Colour (0xffffffff));
+        assignBtn.setColour (juce::TextButton::textColourOnId,   juce::Colour (0xffeeeeee));
         assignBtn.onClick = [this] {
             if (onAssignToggled)
                 onAssignToggled (currentTab, assignBtn.getToggleState());
@@ -75,17 +75,17 @@ public:
         g.setColour (juce::Colour (0xff9a9aa0));
         g.drawHorizontalLine (0, 0.0f, static_cast<float> (getWidth()));
 
-        // "Advanced" label
-        g.setColour (juce::Colour (0xff33333a));
-        g.setFont (juce::Font ("Avenir", 13.0f, juce::Font::bold));
-        g.drawText ("ADVANCED  /  MODULATION", 12, 6, 260, 18,
+        // Section title
+        g.setColour (juce::Colour (0xff1a1a1e));
+        g.setFont (juce::Font ("Avenir", 22.0f, juce::Font::bold));
+        g.drawText ("Modulation", 12, 4, 280, 28,
                     juce::Justification::centredLeft);
     }
 
     void resized() override
     {
         auto area = getLocalBounds().reduced (8);
-        area.removeFromTop (20); // space for "Advanced" label
+        area.removeFromTop (30); // space for "Modulation" title
 
         // Top row: tabs + Assign button on right
         auto tabRow = area.removeFromTop (26);

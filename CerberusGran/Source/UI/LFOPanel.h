@@ -12,17 +12,28 @@ public:
           depthKnob ("Depth", ""),
           phaseKnob ("Phase", "")
     {
-        auto accent = juce::Colour (0xff8B5CF6);
+        // Dark accent + light grey knob fill for visibility on light panel
+        auto accent     = juce::Colour (0xff33333a);
+        auto knobBg     = juce::Colour (0xffc8c8cd);
+        auto labelCol   = juce::Colour (0xff222226);
+        auto valueCol   = juce::Colour (0xff555560);
 
-        rateKnob.setAccentColour (accent);
+        auto styleKnob = [&] (RotaryKnob& k) {
+            k.setAccentColour (accent);
+            k.setKnobBgColour (knobBg);
+            k.setKnobOutline  (false);
+            k.setTextColours  (labelCol, valueCol);
+        };
+
+        styleKnob (rateKnob);
         addAndMakeVisible (rateKnob);
         rateAttach = std::make_unique<SliderAttach> (p.apvts, "lfo_rate", rateKnob.getSlider());
 
-        depthKnob.setAccentColour (accent);
+        styleKnob (depthKnob);
         addAndMakeVisible (depthKnob);
         depthAttach = std::make_unique<SliderAttach> (p.apvts, "lfo_depth", depthKnob.getSlider());
 
-        phaseKnob.setAccentColour (accent);
+        styleKnob (phaseKnob);
         addAndMakeVisible (phaseKnob);
         phaseAttach = std::make_unique<SliderAttach> (p.apvts, "lfo_phase", phaseKnob.getSlider());
 
@@ -35,9 +46,9 @@ public:
         bipolarBtn.setButtonText ("Bipolar");
         bipolarBtn.setClickingTogglesState (true);
         bipolarBtn.setColour (juce::TextButton::buttonColourId,   juce::Colour (0xffd8d8dc));
-        bipolarBtn.setColour (juce::TextButton::buttonOnColourId, juce::Colour (0xff8B5CF6));
+        bipolarBtn.setColour (juce::TextButton::buttonOnColourId, juce::Colour (0xff33333a));
         bipolarBtn.setColour (juce::TextButton::textColourOffId,  juce::Colour (0xff555560));
-        bipolarBtn.setColour (juce::TextButton::textColourOnId,   juce::Colour (0xffffffff));
+        bipolarBtn.setColour (juce::TextButton::textColourOnId,   juce::Colour (0xffeeeeee));
         addAndMakeVisible (bipolarBtn);
         bipolarAttach = std::make_unique<ButtonAttach> (p.apvts, "lfo_bipolar", bipolarBtn);
     }
@@ -76,13 +87,13 @@ public:
             else        path.lineTo (x, y);
         }
 
-        g.setColour (juce::Colour (0xff8B5CF6));
+        g.setColour (juce::Colour (0xff33333a));
         g.strokePath (path, juce::PathStrokeType (1.8f));
 
         // Playhead cursor
         float phase = lfo.getPhase();
         float px = preview.getX() + phase * preview.getWidth();
-        g.setColour (juce::Colour (0xff8B5CF6).withAlpha (0.7f));
+        g.setColour (juce::Colour (0xff33333a).withAlpha (0.6f));
         g.drawVerticalLine ((int) px, preview.getY(), preview.getBottom());
     }
 
